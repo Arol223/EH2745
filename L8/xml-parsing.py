@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 #Next step is to create a tree by parsing the XML file referenced
 # We are here using a sample XML file provided by Microsoft that containts
 # records of books
+#%%
 tree = ET.parse('books.xml')
 
 #If you have not already, please open up the books.xml file
@@ -38,31 +39,31 @@ print (root.attrib)
 # In this first loop, we retrieve the tag of the children as well as 
 # any attributes
 
-
+#%%
 for child in root:
     print (child.tag, child.attrib)
 
 
 # To find all tags that exist  in the document and store them in a list
-    
+#%%    
 tags = []
 for child in root.iter():
     if child.tag not in tags:
         tags.append(child.tag)
 print (tags)
-
+#%%
 # To print all titles of all books
 for ti in root.iter('title'):
     print (ti.text)
 
-
+#%%
 # To find a specific piece of text from one specific child in the three
 # Text in the first book's second child (=title)
 print (root[0][1].text)
 
 
 # Print all booktitles and their authors.
-
+#%%
 for b in root.findall('book'):
     name = b.find('title')
     print(name.text)
@@ -70,6 +71,13 @@ for b in root.findall('book'):
         print(' |-->', a.text)
 
 
-        
+#%% Building a dict with the book titles and their ID's
+id_title = {}
+for b in root.findall('book'):
+    ID = b.attrib['id']
+    title = b.find('title')
+    id_title[ID] = title.text
+
+
 #
     
