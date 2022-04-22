@@ -81,3 +81,11 @@ for b in root.findall('book'):
 
 #
     
+#%%
+books_2001 = []
+for b in root.findall('book'):
+    a = b.find('publish_date').text
+    if a[0:4] == '2001':
+        books_2001.append(b.find('title').text)
+        
+print(books_2001)
