@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 # We are here using ENTSO-E  model files used in Interoperability testing
 tree = ET.parse('MicroGridTestConfiguration_T1_BE_EQ_V2.xml')
 
-#If you have not already, please open up the books.xml file
+
 
 # After these two steps we now have read the XML file and converted (parsed) 
 # the XML data with its tags, attributes and data into a tree stored in memory
@@ -67,6 +67,7 @@ for ids in microgrid:
 print ("BusbarSections IDs")
 for busbars in microgrid.findall('cim:BusbarSection', ns):
     print (busbars.attrib.get(ns['rdf']+'ID'))
+<<<<<<< Updated upstream
     
 #%%
 
@@ -93,5 +94,11 @@ for VL in microgrid.findall('cim:VoltageLevel', ns):
 for bbs in microgrid.findall('cim:BusbarSection', ns):
     if bbs.find('cim:Equipment.EquipmentContainer',ns).attrib.get(ns['rdf'] + 'resource') == '#' + ID:
         print(bbs.attrib.get(ns['rdf'] + 'ID'))
+=======
+  
+#%%
+for ACLineSegment in microgrid.findall('cim:ACLineSegment', ns):
+    print(ACLineSegment.attrib.get(ns['rdf'] + 'ID'))
+>>>>>>> Stashed changes
 
 
