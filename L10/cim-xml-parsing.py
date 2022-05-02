@@ -67,38 +67,14 @@ for ids in microgrid:
 print ("BusbarSections IDs")
 for busbars in microgrid.findall('cim:BusbarSection', ns):
     print (busbars.attrib.get(ns['rdf']+'ID'))
-<<<<<<< Updated upstream
-    
-#%%
-
-# Find and list the id of all busbarsections elements in the substation called 
-# Anvers
-print("BusbarSections associated with Anvers IDs")
-
-# Find the ID of anvers
-for ss in microgrid.findall('cim:Substation', ns):
-    name = ss.find('cim:IdentifiedObject.name',ns).text
-    if name == 'Anvers':
-        ID_anvers = ss.attrib.get(ns['rdf'] + 'ID')
-        break
-busbarsections_anvers = []
-
-# Find the voltage level associated with Anvers
-
-for VL in microgrid.findall('cim:VoltageLevel', ns):
-    ss = VL.find('cim:VoltageLevel.Substation',ns)
-    
-    if ss.attrib.get(ns['rdf'] + 'resource') == '#' + ID_anvers:
-        ID = VL.attrib.get(ns['rdf'] + 'ID')
-        
-for bbs in microgrid.findall('cim:BusbarSection', ns):
-    if bbs.find('cim:Equipment.EquipmentContainer',ns).attrib.get(ns['rdf'] + 'resource') == '#' + ID:
-        print(bbs.attrib.get(ns['rdf'] + 'ID'))
-=======
   
 #%%
+print('ACLineSegment ID:s')
 for ACLineSegment in microgrid.findall('cim:ACLineSegment', ns):
     print(ACLineSegment.attrib.get(ns['rdf'] + 'ID'))
->>>>>>> Stashed changes
-
-
+#%%
+print("Number of Terminals:")
+enumerate(microgrid.findall('cim:Terminal', ns))
+for i, t in enumerate(microgrid.findall('cim:Terminal', ns)):
+    g = i
+print(g)        
