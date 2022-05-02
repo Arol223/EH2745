@@ -5,7 +5,7 @@ Created on Thu Apr 28 13:51:23 2022
 @author: arvidro
 """
 import xml.etree.ElementTree as ET
-
+from collections import deque # This is used as a stack in the tree traversal, has faster methodws than lists which is relevant for larger grids
 ns = {'cim':'http://iec.ch/TC57/2013/CIM-schema-cim16#',
       'entsoe':'http://entsoe.eu/CIM/SchemaExtension/3/1#',
       'rdf':'{http://www.w3.org/1999/02/22-rdf-syntax-ns#}'}
@@ -33,7 +33,7 @@ def get_name(element):
     name (str).
 
     """
-    name = element.find('cim:IdentifiedObject.name').text
+    name = element.find('cim:IdentifiedObject.name', ns).text
     return name
 def get_ID(element):
     ID = element.attrib[ns['rdf'] + 'ID']
@@ -146,23 +146,39 @@ def get_terminals(tree, element_id, CE):
 
 class TraversalNode:
     
-    def __init__(self, ID, node_type, CE_type, name=None, Terminal_List=[],
-                 num_attch_terms=0, CE = None, CN=None):
+    def __init__(self, ID, node_type, CE_type=None, name=None, Terminal_List=[],
+                  CE = None, CN=None, busbar_ID=None):
         # The CE and CN attributes are None if the node is not a terminal
+        # The busbar_ID attribute applies to CN that are connected to busbars
         if name is not None:
             self.name = name
+        self.ID = ID
+        self.num_attch_terms = len(Terminal_List)
         self.node_type = node_type
         self.CE = CE
         self.CN = CN
         self.CE_type = CE_type
         self.Terminal_List = Terminal_List
-        self.num_attch_terms = num_attch_terms
         self.traversed = False
-    
-    def traverse(self):
-        self.traversed = True
-    
-    
+        self.busbar_ID = busbar_ID
+        
+    def set_busbar_ID(self, busbar_ID):
+        self.busbar_ID = busbar_ID
+
+def set_busbar_IDs(traversal_nodes):
+    for node in traversal_nodes.values():
+        if node.node_type == 'CN':
+            for term in node.Terminal_List.keys():
+                CE = traversal_nodes[traversal_nodes[term].CE]
+                if traversal_nodes[traversal_nodes[term].CE].CE_type == 'BusbarSection':
+                    node.set_busbar_ID({'Busbar':CE.ID, 'Terminal':term})
+                    break
+        
+def get_terminal_parents(terminal):
+    res = get_resources(terminal)
+    parents = {'CN': res['Terminal.ConnectivityNode'], 'CE':res['Terminal.ConductingEquipment']}
+    return parents
+
 def find_next_node(previous_node, current_node):
     curr_type = current_node.node_type
     prev_type = previous_node.node_type
@@ -178,19 +194,107 @@ def find_next_node(previous_node, current_node):
     elif next_type == 'CN':
         next_ID = current_node.CN
     else:
-        for terminal in current_node.Terminal_List:
-            if not terminal['traversed']:
-                next_ID = terminal['ID']
+        for terminal, traversed in current_node.Terminal_List.items():
+            if not traversed:
+                next_ID = terminal
     
     return next_ID
 
 def get_nodes(tree):
     traversal_nodes = {}
     for child in tree.iter():
-        if ns['cim'] + 'ConnectivityNode' in child.tag:
+        if child.tag == '{' + ns['cim']  + '}' + 'ConnectivityNode':
+            ID = get_ID(child)
+            terms = get_terminals(tree, ID, CE=False)
+
             
+            terminal_list = {ID:False for ID in terms}#{[{'ID':ID, 'traversed':False} for ID in terms]}
+            
+            node = TraversalNode(ID, node_type='CN', name=get_name(child),
+                                 Terminal_List=terminal_list)
+            traversal_nodes[ID] = node
+        elif child.tag == '{' + ns['cim']  + '}' + 'Terminal':
+            ID = get_ID(child)
+            parents = get_terminal_parents(child)
+            node = TraversalNode(ID, 'Te', **parents)
+            traversal_nodes[ID] = node
+        else:
+            for CE_type in conductive_equipment:
+                if child.tag == '{' + ns['cim'] + '}' + CE_type:
+                    ID = get_ID(child)
+                    name = get_name(child)
+                    terms = get_terminals(tree, ID, CE=True)
+                    terminal_list = {ID:False for ID in terms}
+                    node = TraversalNode(ID, 'CE', CE_type=CE_type, name=name, 
+                                         Terminal_List=terminal_list)
+                    traversal_nodes[ID] = node
+    
     return traversal_nodes
 
+def get_topology(filename):
+    # process topology from a cim-xml file, follows proposed algo from provided paper 
+    root = ET.parse(filename).getroot()
+    traversal_nodes = get_nodes(root)
+    
+    CN_stack = deque()
+    CE_stack = deque()
+    everything_stack = deque()
+    
+    topology = []
+    
+    for node in traversal_nodes.values():
+        # Find a suitable end device for the first node
+        if node.num_attch_terms == 1 and node.CE_type != 'BusbarSection':
+            previous_node = current_node = node
+            CE_stack.append(node)
+            break
+    
+    # This is the algorithm from the paper
+    while True:
+        next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+        current_id = current_node.ID
+        if current_node.node_type == 'Te':
+            if next_node.node_type == 'CN':
+                if next_node not in CN_stack:
+                    CN_stack.append(next_node)
+                # Option 1: CN is not attached to a busbar
+                if next_node.busbar_ID is None:
+                    # Updating the nodes
+                    previous_node.Terminal_List[current_id] = True # Indicate that the terminal has been traversed
+                    next_node.Terminal_List[current_id] = True
+                    previous_node = current_node
+                    current_node = next_node
+                
+                # Option 2: CN is attached to a busbar
+                else:
+                    busbar = traversal_nodes[current_node.busbar_ID]
+                    terminal_ID = busbar['Terminal']
+                    busbar_ID = busbar['Busbar']
+                    next_node.Terminal_List[terminal_ID] = True
+                    CE_stack.append(traversal_nodes[busbar_ID])
+                    topology.append(CE_stack)
+                    CE_stack = deque()  # Clear the CE-stack to get a clean slate for next publication
+                    CE_stack.append(traversal_nodes[busbar_ID])
+                    previous_node = current_node
+                    current_node = next_node
+                
+            elif next_node.node_type == 'CE':
+                current_node = next_node
+                CE_stack.append(next_node)
+        
+        elif current_node.node_type == 'CN':
+            for term, trav in current_node.Terminal_List.items():
+                if not trav:
+                    previous_node = current_node
+                    current_node = next_node
+                    break
+            topology.append(CE_stack)
+            CN_stack.pop()
+            current_node = CN_stack.pop()
+            
+        elif current_node.node_type == 'CE':
+            pass
+    
 class Terminal:
     
     def __init__(self, ID, CE_ID, CN_ID):
@@ -277,6 +381,5 @@ class LineSegment:
 tree = ET.parse('Assignment_EQ_reduced.xml')
 root = tree.getroot()
 
-trafo = root.find('cim:PowerTransformer',ns)
-
-ends = get_transformer_ends(root, get_ID(trafo))
+tn = get_nodes(root)
+set_busbar_IDs(tn)
