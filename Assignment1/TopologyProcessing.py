@@ -164,6 +164,8 @@ class TraversalNode:
         
     def set_busbar_ID(self, busbar_ID):
         self.busbar_ID = busbar_ID
+    def traverse(self):
+        self.traversed = True
 
 def set_busbar_IDs(traversal_nodes):
     for node in traversal_nodes.values():
@@ -205,10 +207,10 @@ def get_nodes(tree):
     for child in tree.iter():
         if child.tag == '{' + ns['cim']  + '}' + 'ConnectivityNode':
             ID = get_ID(child)
-            terms = get_terminals(tree, ID, CE=False)
+            terminal_list = get_terminals(tree, ID, CE=False)
 
             
-            terminal_list = {ID:False for ID in terms}#{[{'ID':ID, 'traversed':False} for ID in terms]}
+            #terminal_list = {ID:False for ID in terms}#{[{'ID':ID, 'traversed':False} for ID in terms]}
             
             node = TraversalNode(ID, node_type='CN', name=get_name(child),
                                  Terminal_List=terminal_list)
@@ -247,6 +249,7 @@ def get_topology(filename):
         if node.num_attch_terms == 1 and node.CE_type != 'BusbarSection':
             previous_node = current_node = node
             CE_stack.append(node)
+            everything_stack.append(node)
             break
     
     # This is the algorithm from the paper
@@ -254,6 +257,7 @@ def get_topology(filename):
         next_node = traversal_nodes[find_next_node(previous_node, current_node)]
         current_id = current_node.ID
         if current_node.node_type == 'Te':
+            everything_stack.append(current_node)
             if next_node.node_type == 'CN':
                 if next_node not in CN_stack:
                     CN_stack.append(next_node)
@@ -283,6 +287,10 @@ def get_topology(filename):
                 CE_stack.append(next_node)
         
         elif current_node.node_type == 'CN':
+            if current_node not in CN_stack:
+                CN_stack.append(current_node)
+            if current_node not in everything_stack:
+                everything_stack.append(current_node)
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     previous_node = current_node
@@ -290,10 +298,18 @@ def get_topology(filename):
                     break
             topology.append(CE_stack)
             CN_stack.pop()
-            current_node = CN_stack.pop()
+            current_node = CN_stack[-1]
             
         elif current_node.node_type == 'CE':
-            pass
+            CE_stack.append(current_node)
+            everything_stack.append(current_node)
+            for term, trav in current_node.Terminal_List.items():
+                if not trav:
+                    previous_node = current_node
+                    current_node = next_node
+                    break
+            topology.append(CE_stack)
+    return topology, everything_stack
     
 class Terminal:
     
@@ -378,8 +394,9 @@ class LineSegment:
         pass
 
 
-tree = ET.parse('Assignment_EQ_reduced.xml')
-root = tree.getroot()
+#tree = ET.parse('Assignment_EQ_reduced.xml')
+#root = tree.getroot()
 
-tn = get_nodes(root)
-set_busbar_IDs(tn)
+#tn = get_nodes(root)
+#set_busbar_IDs(tn)
+get_topology('Assignment_EQ_reduced.xml')
