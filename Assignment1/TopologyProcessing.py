@@ -250,7 +250,7 @@ def get_topology(filename):
             break
     
     # This is the algorithm from the paper
-    while True:
+    while len(everything_stack) < len(traversal_nodes):
         next_node = traversal_nodes[find_next_node(previous_node, current_node)]
         current_id = current_node.ID
         if current_node.node_type == 'Te':
