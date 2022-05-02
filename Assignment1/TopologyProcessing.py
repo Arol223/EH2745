@@ -39,6 +39,33 @@ def get_ID(element):
     ID = element.attrib[ns['rdf'] + 'ID']
     return ID
 
+def get_transformer_ends(tree, transformer_id):
+    terms = get_terminals(tree, transformer_id, True)
+    transformer_ends = []
+    for end in tree.findall('cim:PowerTransformerEnd', ns):
+        res = get_resources(end)
+        if res['TransformerEnd.Terminal'] in terms:
+            ratedU = end.find('cim:PowerTransformerEnd.ratedU',ns).text
+            trafo_end = {}
+            trafo_end['ID'] = get_ID(end)
+            trafo_end['Rated_U'] = ratedU
+            trafo_end['Terminal'] = res['TransformerEnd.Terminal']
+            transformer_ends.append(trafo_end)
+    return transformer_ends
+
+def get_tap_changer(tree, transformer_end_ID):
+    
+    for tap_changer in tree.findall('cim:RatioTapChanger', ns):
+        res = get_resources(tap_changer)
+        if res['RatioTapChanger.TransformerEnd'] == transformer_end_ID:
+            ID = get_ID(tap_changer)
+            return ID
+    for tap_changer in tree.findall('cim:PhaseTapChangerAsymmetrical', ns):
+        res = get_resources(tap_changer)
+        if res['RatioTapChanger.TransformerEnd'] == transformer_end_ID:
+            ID = get_ID(tap_changer)
+            return ID
+        
 def get_resources(element):
     """
     
@@ -59,6 +86,32 @@ def get_resources(element):
             tag = resource.tag.replace('{' + ns['cim'] + '}', '')
             resources[tag] = resource.attrib[ns['rdf'] + 'resource'].replace('#','')
     return resources
+
+def get_CN(tree):
+    
+    connectivity_nodes = []
+    
+    for CN in tree.findall('cim:ConnectivityNode', ns):
+        ID = get_ID(CN)
+        terms = get_terminals(tree, ID, False)
+        n_attch_terms = len(terms)
+        node = {}
+        node['ID'] = ID
+        node['n_attch_terms'] = n_attch_terms
+        node['attch_terms'] = terms
+        connectivity_nodes.append(node)
+    return connectivity_nodes
+
+def get_terminals2(tree):
+    terms = []
+    for term in tree.findall('cim:Terminal', ns):
+        res = get_resources(term)
+        ID = get_ID(term)
+        CN = res['cim:Terminal.ConnectivityNode']
+        CE = res['cim:Terminal.ConductingEquipment']
+        t = {'ID':ID, 'CN':CN, 'CE':CE}
+        terms.append(t)
+    return terms
 
 def get_terminals(tree, element_id, CE):
     """
@@ -93,12 +146,50 @@ def get_terminals(tree, element_id, CE):
 
 class TraversalNode:
     
-    def __init__(self, ID, node_type, CE_type, Terminal_List=[],
-                 num_attch_terms=0):
+    def __init__(self, ID, node_type, CE_type, name=None, Terminal_List=[],
+                 num_attch_terms=0, CE = None, CN=None):
+        # The CE and CN attributes are None if the node is not a terminal
+        if name is not None:
+            self.name = name
         self.node_type = node_type
+        self.CE = CE
+        self.CN = CN
         self.CE_type = CE_type
         self.Terminal_List = Terminal_List
         self.num_attch_terms = num_attch_terms
+        self.traversed = False
+    
+    def traverse(self):
+        self.traversed = True
+    
+    
+def find_next_node(previous_node, current_node):
+    curr_type = current_node.node_type
+    prev_type = previous_node.node_type
+    if curr_type == 'Te':
+        if prev_type == 'CE':
+            next_type = 'CN'
+        else:
+            next_type = 'CE'
+    else:
+        next_type = 'Te'
+    if next_type == 'CE':
+        next_ID = current_node.CE
+    elif next_type == 'CN':
+        next_ID = current_node.CN
+    else:
+        for terminal in current_node.Terminal_List:
+            if not terminal['traversed']:
+                next_ID = terminal['ID']
+    
+    return next_ID
+
+def get_nodes(tree):
+    traversal_nodes = {}
+    for child in tree.iter():
+        if ns['cim'] + 'ConnectivityNode' in child.tag:
+            
+    return traversal_nodes
 
 class Terminal:
     
@@ -181,3 +272,11 @@ class BusBar:
 class LineSegment:
     def __init__(self):
         pass
+
+
+tree = ET.parse('Assignment_EQ_reduced.xml')
+root = tree.getroot()
+
+trafo = root.find('cim:PowerTransformer',ns)
+
+ends = get_transformer_ends(root, get_ID(trafo))
