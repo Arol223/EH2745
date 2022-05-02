@@ -199,18 +199,24 @@ def find_next_node(previous_node, current_node):
         for terminal, traversed in current_node.Terminal_List.items():
             if not traversed:
                 next_ID = terminal
+                break
     
     return next_ID
 
+def print_node_types(traversal_nodes):
+    for node in traversal_nodes.values():
+        if node.node_type == 'CE':
+            print('Node object is a: ' + node.CE_type)
+            
 def get_nodes(tree):
     traversal_nodes = {}
     for child in tree.iter():
         if child.tag == '{' + ns['cim']  + '}' + 'ConnectivityNode':
             ID = get_ID(child)
-            terminal_list = get_terminals(tree, ID, CE=False)
+            terms = get_terminals(tree, ID, CE=False)
 
             
-            #terminal_list = {ID:False for ID in terms}#{[{'ID':ID, 'traversed':False} for ID in terms]}
+            terminal_list = {ID:False for ID in terms}#{[{'ID':ID, 'traversed':False} for ID in terms]}
             
             node = TraversalNode(ID, node_type='CN', name=get_name(child),
                                  Terminal_List=terminal_list)
@@ -233,11 +239,18 @@ def get_nodes(tree):
     
     return traversal_nodes
 
+def print_topology(topology):
+    for i, top in enumerate(topology):
+        print("The {}th topology section is: ".format(i))
+        for node in top:
+            print(node.CE_type)
+            
 def get_topology(filename):
     # process topology from a cim-xml file, follows proposed algo from provided paper 
     root = ET.parse(filename).getroot()
     traversal_nodes = get_nodes(root)
-    
+    set_busbar_IDs(traversal_nodes)
+    print_node_types(traversal_nodes)
     CN_stack = deque()
     CE_stack = deque()
     everything_stack = deque()
@@ -248,15 +261,22 @@ def get_topology(filename):
         # Find a suitable end device for the first node
         if node.num_attch_terms == 1 and node.CE_type != 'BusbarSection':
             previous_node = current_node = node
-            CE_stack.append(node)
-            everything_stack.append(node)
             break
     
     # This is the algorithm from the paper
+    loop_number = 0
     while len(everything_stack) < len(traversal_nodes):
+        loop_number += 1
+        print('Number of iterations: {}'.format(loop_number))
         next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+        print(previous_node.node_type)
+        print(current_node.node_type)
+        print(next_node.node_type)
+        previous_ID = previous_node.ID
         current_id = current_node.ID
         if current_node.node_type == 'Te':
+            #previous_node.Terminal_List[current_id] = True # Indicate that the terminal has been traversed
+            #next_node.Terminal_List[current_id] = True
             everything_stack.append(current_node)
             if next_node.node_type == 'CN':
                 if next_node not in CN_stack:
@@ -264,14 +284,12 @@ def get_topology(filename):
                 # Option 1: CN is not attached to a busbar
                 if next_node.busbar_ID is None:
                     # Updating the nodes
-                    previous_node.Terminal_List[current_id] = True # Indicate that the terminal has been traversed
-                    next_node.Terminal_List[current_id] = True
                     previous_node = current_node
                     current_node = next_node
                 
                 # Option 2: CN is attached to a busbar
                 else:
-                    busbar = traversal_nodes[current_node.busbar_ID]
+                    busbar = traversal_nodes[next_node.ID].busbar_ID
                     terminal_ID = busbar['Terminal']
                     busbar_ID = busbar['Busbar']
                     next_node.Terminal_List[terminal_ID] = True
@@ -281,34 +299,55 @@ def get_topology(filename):
                     CE_stack.append(traversal_nodes[busbar_ID])
                     previous_node = current_node
                     current_node = next_node
+                    print_topology(topology)
                 
             elif next_node.node_type == 'CE':
+                previous_node = current_node
                 current_node = next_node
-                CE_stack.append(next_node)
+                
         
         elif current_node.node_type == 'CN':
+            current_node.Terminal_List[previous_ID] = True
             if current_node not in CN_stack:
                 CN_stack.append(current_node)
             if current_node not in everything_stack:
                 everything_stack.append(current_node)
+            found_non_traversed = False
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     previous_node = current_node
                     current_node = next_node
+                    found_non_traversed = True
                     break
-            topology.append(CE_stack)
-            CN_stack.pop()
-            current_node = CN_stack[-1]
+            if not found_non_traversed:
+                topology.append(CE_stack)
+                print_topology(topology)
+                CE_stack = deque()
+                CN_stack.pop()
+                current_node = CN_stack[-1]
             
         elif current_node.node_type == 'CE':
+            previous_type = previous_node.node_type
+            #print(current_node.CE_type)
+            if previous_type == 'Te':
+                current_node.Terminal_List[previous_ID] = True
             CE_stack.append(current_node)
             everything_stack.append(current_node)
+            found_non_traversed = False
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     previous_node = current_node
                     current_node = next_node
+                    found_non_traversed = True
                     break
-            topology.append(CE_stack)
+            if not found_non_traversed:
+                topology.append(CE_stack)
+                print_topology(topology)
+                CE_stack = deque()
+                current_node = CN_stack[0]
+                bb_ID = current_node.busbar_ID
+                if bb_ID is not None:
+                    CE_stack.append(traversal_nodes[bb_ID['Busbar']]) # Add the busbar if one exists
     return topology, everything_stack
     
 class Terminal:
