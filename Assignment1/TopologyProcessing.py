@@ -15,6 +15,12 @@ ns = {'cim':'http://iec.ch/TC57/2013/CIM-schema-cim16#',
 conductive_equipment = ('ACLineSegment', 'BusbarSection', 'Breaker',
                         'EnergyConsumer', 'SynchronousMachine',
                         'LinearShuntCompensator', 'PowerTransformer')
+tap_changer_EQ_parameters = ('lowStep', 'highStep', 'neutralStep', 
+                             'normalStep', 'neutralU')
+ratio_tap_changer_EQ_parameters = ('stepVoltageIncrement')
+phase_tap_changer_EQ_parameters = ('PhaseTapChangerNonLinear.voltageStepIncrement')
+tap_changer_SSH_parameters = ('step')
+tapchanger_types = ('RatioTapChanger', 'PhaseTapChangerAsymmetrical')
 
 EQ_filename = "Assignment_EQ_reduced.xml"
 SSH_filename = "Assignment_SSH_reduced.xml"
@@ -46,10 +52,12 @@ def get_transformer_ends(tree, transformer_id):
         res = get_resources(end)
         if res['TransformerEnd.Terminal'] in terms:
             ratedU = end.find('cim:PowerTransformerEnd.ratedU',ns).text
+            ratedS = end.find('cim:PowerTransformerEnd.ratedS',ns).text
             trafo_end = {}
             trafo_end['ID'] = get_ID(end)
             trafo_end['Rated_U'] = ratedU
             trafo_end['Terminal'] = res['TransformerEnd.Terminal']
+            trafo_end['Rated_S'] = ratedS
             transformer_ends.append(trafo_end)
     return transformer_ends
 
@@ -59,12 +67,15 @@ def get_tap_changer(tree, transformer_end_ID):
         res = get_resources(tap_changer)
         if res['RatioTapChanger.TransformerEnd'] == transformer_end_ID:
             ID = get_ID(tap_changer)
-            return ID
+            TC_type = 'RatioTapChanger'
+            return ID, TC_type
     for tap_changer in tree.findall('cim:PhaseTapChangerAsymmetrical', ns):
         res = get_resources(tap_changer)
-        if res['RatioTapChanger.TransformerEnd'] == transformer_end_ID:
+        if res['PhaseTapChanger.TransformerEnd'] == transformer_end_ID:
             ID = get_ID(tap_changer)
-            return ID
+            TC_type = 'PhaseTapChangerAsymmetrical'
+            return ID, TC_type
+    raise Exception("Could not find tap changer for Transformer End")
         
 def get_resources(element):
     """
@@ -87,6 +98,31 @@ def get_resources(element):
             resources[tag] = resource.attrib[ns['rdf'] + 'resource'].replace('#','')
     return resources
 
+def get_voltage_level(element):
+    # get the voltage_level ID of an element
+    VL = element.find('cim:Equipment.EquipmentContainer', ns)
+    VL_ID = VL.attrib[ns['rdf'] + 'resource'].replace('#', '')
+    return VL_ID
+def get_base_voltage_ID(VoltageLevel):
+    # Get the ID of the BaseVoltage associated with a voltage level
+    # Input is a VoltageLevel element
+    BV = VoltageLevel.find('cim:VoltageLevel.BaseVoltage', ns)
+    BV_ID = BV.attrib[ns['rdf'] + 'resource'].replace('#', '')
+    return BV_ID
+
+def get_base_voltage(tree, element):
+    # Find the basevoltage of an element in the EQ file tree
+    VL_ID = get_voltage_level(element)
+    
+    for VL in tree.findall('cim:VoltageLevel'):
+        if get_ID(VL) == VL_ID:
+            BV_ID = get_base_voltage_ID(VL)
+            break
+    for BV in tree.findall('cim:BaseVoltage'):
+        if get_ID(BV) == BV_ID:
+            NV = BV.find('cim:BaseVoltage.nominalVoltage', ns).text
+            return NV
+        
 def get_CN(tree):
     
     connectivity_nodes = []
@@ -178,11 +214,15 @@ class TraversalNode:
         self.traversed = False
         self.busbar_ID = busbar_ID
         
+        self.transformer_traversal_order = [] # used to indicate the order in which the terminals of a transformer were encountered
+        
     def set_busbar_ID(self, busbar_ID):
         self.busbar_ID = busbar_ID
-    def traverse(self):
-        self.traversed = True
-
+    def traverse_transformer(self, terminal_ID):
+        # To keep track of which transformer end was traversed first for pairing
+        # with the right busbar
+        self.transformer_traversal_order.append(terminal_ID)
+    
 def set_busbar_IDs(traversal_nodes):
     for node in traversal_nodes.values():
         if node.node_type == 'CN':
@@ -399,16 +439,24 @@ def get_topology(filename):
             if current_node not in everything_stack:
                 everything_stack.append(current_node)
             found_non_traversed = False
+            if current_node.CE_type == 'PowerTransformer':
+                # Keep track of traversal order
+                current_node.traverse_transformer(previous_ID)
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+                    if current_node.CE_type == 'PowerTransformer':
+                        # adding the next node here in case an odd number of terminals 
+                        # exist, e.g. three winding trafo.
+                        current_node.traverse_transformer(next_node.ID)
                     previous_node = current_node
                     current_node = next_node
                     found_non_traversed = True
                     break
             if not found_non_traversed:
                 topology.append(CE_stack)
-                print_topology(topology, index=-1)
+                if len(CE_stack) > 2:
+                    print_topology(topology, index=-1)
                 CE_stack = []#deque()
                 current_node = CN_stack[-1]
                 bb_ID = current_node.busbar_ID
@@ -416,84 +464,96 @@ def get_topology(filename):
                     CE_stack.append(traversal_nodes[bb_ID['Busbar']]) # Add the busbar if one exists
     return topology, everything_stack
     
-class Terminal:
-    
-    def __init__(self, ID, CE_ID, CN_ID):
-        self.ID = ID
-        self.CE_ID = CE_ID
-        self.CN_ID = CN_ID
-        self.visited = False
-        
-    def traverse(self):
-        self.visited = True
 
 class Transformer:
     
-    def __init__(self, tree, ID):
+    def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
         self.ID = ID
+        self.get_ends(EQ_filename)
+        self.get_tap_changer(EQ_filename, SSH_filename)
+    
+    def get_ends(self, EQ_filename):
+        # get the transformer ends and rated voltages, rated S for the transformer 
+        tree = ET.parse(EQ_filename).getroot()
+        self.transformer_ends = get_transformer_ends(tree, self.ID)
+        self.rated_S = self.terminal_end[0]['Rated_S']
+        self.rated_U = [(end['Terminal'], end['Rated_U']) for end in self.transformer_ends]
+        self.rated_U.sort()
         
-        ends = self.get_ends(tree)
+    def get_tap_changer(self, EQ_filename, SSH_filename):
+        EQ_tree = ET.parse(EQ_filename).getroot()
+        SSH_tree = ET.parse(SSH_filename).getroot()
+        for end in self.transformer_ends:
+            try:
+                ID, TC_type = get_tap_changer(EQ_tree, end['ID'])
+                break
+            except:
+                continue
+            print("Transformer has no tap changer")
+        TC = find_element(EQ_tree, ID, TC_type)
+        tap_changer = {'ID':ID, 'TC_type':TC_type}
+        for child in TC.iter:
+            tag = child.tag.replace('{' + ns['cim'] + '}' + 'TapChanger.', '')
+            RTC_tag = child.tag.replace('{' + ns['cim'] + '}' + 'RatioTapChanger', '')
+            PTC_tag = child.tag.replace('{' + ns['cim'] + '}', '')
+            if tag in tap_changer_EQ_parameters:
+                tap_changer[tag] = child.text
+            elif RTC_tag in ratio_tap_changer_EQ_parameters:
+                tap_changer[RTC_tag] = child.text
+            elif PTC_tag in phase_tap_changer_EQ_parameters:
+                tap_changer[PTC_tag.replace('PhaseTapChangerNonLinear.', '')] = child.text
+        res = get_resources(TC)
+        if 'RatioTapChanger.TransformerEnd' in res.keys():
+            tap_changer['trans_end'] = res['RatioTapChanger.TransformerEnd']
+        elif 'PhaseTapChanger.TransformerEnd' in res.keys():
+            tap_changer['trans_end'] = res['PhaseTapChanger.TransformerEnd']
         
-    def get_ends(self, tree):
-        pass
+        for TC in SSH_tree.findall('cim:{}'.format(TC_type)):
+            
+def get_about_SSH(element):        
+    about = element.attrib[ns['rdf' + 'about']].replace('#', '')
+    return about
+class Breaker:
+    
+    def __init__(self, ID):
+        self.ID = ID
+        self.open = False
+    
+    def set_open_status(self, open_):
+        self.open = open_
+        
+    def get_status(self, filename=SSH_filename):
+        # Get breaker status from SSH-file
+        root = ET.parse(filename).getroot()
+        for breaker in root.findall('cim:Breaker', ns):
+            if breaker.attrib[ns['rdf'] + 'about'].replace('#', '') == self.ID:
+                stat = breaker.find('cim:Switch.open',ns).text
+                if stat == 'false':
+                    self.set_open_status(False)
+                else:
+                    self.set_open_status(True)
+                break
 
-class TransformerEnd:
-    
-    def __init__(self, tree, ID):
-        self.ID = ID
-    
-class NetReader:
-    
-    def __init__(self, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
-         self.load_EQ(EQ_filename)
-         self.load_SSH(SSH_filename)
-    
-    def load_EQ(self, EQfilename):
-        self.EQTree = ET.parse(EQfilename).getroot()
-        
-    
-    def load_SSH(self, SSHfilename):
-        self.SSHTree = ET.parse(SSHfilename).getroot()
-        
-    def get_busbar_list(self, tree=None):
-        if tree is None:
-            tree = self.EQTree
-        busbars = tree.findall('cim:BusbarSection', ns)
-        return busbars
-    
-    def get_line_list(self, tree=None):
-            if tree is None:
-                tree = self.EQTree
-            lines = tree.findall('cim:ACLineSegment', ns)
-            return lines
-    def get_terminal_list(self, tree=None):
-            if tree is None:
-                tree = self.EQTree
-            terminals = tree.findall('cim:Terminal', ns)
-            return terminals
-    def get_connectivity_node_list(self, tree=None):
-            if tree is None:
-                tree = self.EQTree
-            connectivity_nodes = tree.findall('cim:ConnectivityNode', ns)
-            return connectivity_nodes
-    
-    def get_breaker_list(self, tree=None):
-            if tree is None:
-                tree = self.EQTree
-            breakers = tree.findall('cim:Breaker', ns)
-            
-            
-            
-            
-    
-    def make_equipment(self):
-        pass
-    
-    
+def find_element(tree, ID, element_type):
+    # Find a particular element in the tree by matching ID and type
+    # Implemented because this is used a __lot__
+    for  element in tree.findall('cim:{}'.format(element_type), ns):
+            if get_ID(element) == ID:
+                return element
 class BusBar:
-    def __init__(self):
-        pass
-    
+    def __init__(self, ID, filename=EQ_filename):
+        self.ID = ID
+        
+    def get_voltage(self, filename):
+        tree = ET.parse(filename).getroot()
+        bb = find_element(tree, self.ID, 'BusbarSection')
+        self.NV = get_base_voltage(tree, bb)
+            
+    def get_name(self, filename):
+        tree = ET.parse(filename).getroot()
+        bb = find_element(tree, self.ID, 'BusbarSection')
+        self.name = get_name(bb)
+        
 class LineSegment:
     def __init__(self):
         pass
@@ -504,4 +564,4 @@ class LineSegment:
 
 #tn = get_nodes(root)
 #set_busbar_IDs(tn)
-get_topology('Assignment_EQ_reduced.xml')
+#topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
