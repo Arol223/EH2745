@@ -509,7 +509,7 @@ class Transformer:
             tap_changer['trans_end'] = res['PhaseTapChanger.TransformerEnd']
         
         for TC in SSH_tree.findall('cim:{}'.format(TC_type)):
-            
+            pass
 def get_about_SSH(element):        
     about = element.attrib[ns['rdf' + 'about']].replace('#', '')
     return about
