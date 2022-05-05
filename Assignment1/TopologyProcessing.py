@@ -300,6 +300,6 @@ def get_topology(filename):
 #tn = get_nodes(root)
 #set_busbar_IDs(tn)
 topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
-Trans = Transformer('_a708c3bc-465d-4fe7-b6ef-6fa6408a62b0')
+#Trans = Transformer('_a708c3bc-465d-4fe7-b6ef-6fa6408a62b0')
 #acls = ACLineSegment('_b58bf21a-096a-4dae-9a01-3f03b60c24c7')
-bbs = Trans.get_connections(topology)
+#bbs = Trans.get_connections(topology)

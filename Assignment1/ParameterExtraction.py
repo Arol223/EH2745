@@ -8,6 +8,7 @@ Created on Thu May  5 16:03:45 2022
 import TopologyProcessing as tp
 from xml.etree import ElementTree as ET
 from HelpFunctions import *
+import pandapower as pp
 
 class GeneratingUnit:
     def __init__(self, sync_ID, EQ_filename, SSH_filename):
@@ -37,7 +38,12 @@ class GeneratingUnit:
         top = find_connections(self.ID, topology_list)
         for node in top:
             if node.CE_type == 'BusbarSection':
-                return node.ID
+                self.busbar = node.ID
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        bb = busbar_mapping(self.busbar)
+        index = component_index_map['SynchronousMachine'][self.ID]
+        p_mw = self.parameters['p']
+        pp.create_gen(net, bb, p_mw, index=index)
             
 class Transformer:
     
@@ -105,8 +111,21 @@ class Transformer:
                     u = node.busbar_voltage
                     busbars.append((ID, float(u)))
         busbars.sort()
-        return busbars
-
+        self.busbars = busbars
+    
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        # This needs to be extended to create transformer from parameters instead of std type
+        # and include three winding transformers
+        if len(self.busbars) == 2:
+            index = component_index_map['PowerTransformer'][self.ID]
+            hv_bus = busbar_mapping[self.busbars[1][0]]
+            lv_bus = busbar_mapping[self.busbars[0][0]]
+            lv = self.rated_U[0]
+            hv = self.rated_U[1]
+            sn = self.rated_S
+            std_type = "{} MVA {}/{} kV".format(sn, hv, lv)
+        pp.create_transformer(net, hv_bus, lv_bus, std_type, name=self.ID, index=index)
+        
 class BusBarSection:
     def __init__(self, ID, filename=EQ_filename):
         self.ID = ID
@@ -115,12 +134,16 @@ class BusBarSection:
     def get_voltage(self, filename):
         tree = ET.parse(filename).getroot()
         bb = find_element(tree, self.ID, 'BusbarSection')
-        self.NV = get_base_voltage(tree, bb)
+        self.NV = float(get_base_voltage(tree, bb))
             
     def get_name(self, filename):
         tree = ET.parse(filename).getroot()
         bb = find_element(tree, self.ID, 'BusbarSection')
         self.name = get_name(bb)
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        # add this busbar to a pandapower net
+        index = busbar_mapping[self.ID]
+        pp.create_bus(net, self.NV, name=self.name,index=index)
         
 class ACLineSegment:
     def __init__(self, ID, EQ_filename=EQ_filename):
@@ -143,7 +166,14 @@ class ACLineSegment:
         for node in top:
             if node.CE_type == 'BusbarSection':
                 busbars.append(node.ID)
-        return busbars
+        self.busbars = busbars
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        bb0 = busbar_mapping[self.busbars[0]]
+        bb1 = busbar_mapping[self.busbars[1]]
+        length = self.parameters['length']
+        index = component_index_map['ACLineSegment'][self.ID]
+        std_type = "NAYY 4x50 SE"
+        pp.create_line(net, bb0, bb1, length, std_type, index=index)
     
 class EnergyConsumer:
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
@@ -162,8 +192,14 @@ class EnergyConsumer:
         top = find_connections(self.id, topology_list)
         for node in top:
             if node.CE_type == 'BusbarSection':
-                return node.ID
-
+                self.busbar = node.ID
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        bb = busbar_mapping[self.busbar]
+        index = component_index_map['EnergyConsumer'][self.ID]
+        p_mw = self.parameters['p']
+        q_mvar = self.parameters['q']
+        pp.create_load(net, bb, p_mw, q_mvar=q_mvar, index=index)
+        
 class Shunt:
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
         self.ID = ID
@@ -175,8 +211,14 @@ class Shunt:
         top = find_connections(self.ID, topology_list)
         for node in top:
             if node.CE_type == 'BusbarSection':
-                return node.ID
-
+                self.busbar = node.ID
+    def to_pp(self, net, busbar_mapping, component_index_map):
+        # This needs to be extended to use the q value from EQ-file
+        bb = busbar_mapping[self.busbar]
+        index = component_index_map['LinearShuntCompensator'][self.ID]
+        q_mvar = self.q
+        pp.create_shunt(net, bb, q_mvar, index = index)
+        
 class Breaker:
     
     def __init__(self, ID):
@@ -210,4 +252,6 @@ class Breaker:
             key = node.CE_type
             ID = node.ID
             connections[key] = ID
-        return connections
+        self.connections = connections
+    def to_pp(self, busbar_mapping, component_index_map):
+        index = component_index_map['Breaker'][self.ID]

@@ -5,6 +5,8 @@ Created on Thu May  5 16:05:58 2022
 @author: arvidro
 """
 
+from Definitions import *
+
 def find_gen_unit(EQ_tree, sync_ID):
     sync_mach = find_element(EQ_tree, sync_ID, 'SynchronousMahine')
     res = get_resources(sync_mach)
