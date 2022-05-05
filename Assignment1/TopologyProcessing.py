@@ -22,6 +22,10 @@ phase_tap_changer_EQ_parameters = ('PhaseTapChangerNonLinear.voltageStepIncremen
 tap_changer_SSH_parameters = ('step')
 tapchanger_types = ('RatioTapChanger', 'PhaseTapChangerAsymmetrical')
 
+
+AC_line_segment_params = ('ACLineSegment.r', 'ACLineSegment.x',
+                          'Conductor.length')
+
 EQ_filename = "Assignment_EQ_reduced.xml"
 SSH_filename = "Assignment_SSH_reduced.xml"
 
@@ -509,7 +513,13 @@ class Transformer:
             tap_changer['trans_end'] = res['PhaseTapChanger.TransformerEnd']
         
         for TC in SSH_tree.findall('cim:{}'.format(TC_type)):
-            pass
+            if get_about_SSH(TC) == tap_changer['ID']:
+                step = TC.find('cim:TapChanger.step').text
+                tap_changer['step'] = step
+                break
+        self.tap_changer = tap_changer
+        
+                
 def get_about_SSH(element):        
     about = element.attrib[ns['rdf' + 'about']].replace('#', '')
     return about
@@ -554,10 +564,16 @@ class BusBar:
         bb = find_element(tree, self.ID, 'BusbarSection')
         self.name = get_name(bb)
         
-class LineSegment:
-    def __init__(self):
-        pass
-
+class ACLineSegment:
+    def __init__(self, ID, EQ_filename=EQ_filename):
+        self.ID = ID
+        self.get_parameters(EQ_filename)
+    def get_parameters(self, EQ_filename):
+        tree = ET.parse(EQ_filename).getroot()
+        for line in tree.findall('cim:ACLinesSegment'):
+            if get_ID(line) = self.ID:
+                break
+        for 
 
 #tree = ET.parse('Assignment_EQ_reduced.xml')
 #root = tree.getroot()
