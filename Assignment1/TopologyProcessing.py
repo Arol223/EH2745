@@ -22,6 +22,10 @@ phase_tap_changer_EQ_parameters = ('PhaseTapChangerNonLinear.voltageStepIncremen
 tap_changer_SSH_parameters = ('step')
 tapchanger_types = ('RatioTapChanger', 'PhaseTapChangerAsymmetrical')
 
+SynchronousMachine_params = {'EQ':('RotatingMachine.ratedS', 'RotatingMachine.ratedU'),
+                             'SSH':('RotatingMachine.p', 'RotatingMachine.q')}
+GeneratingUnit_params = {'EQ':('GeneratingUnit.nominalP', 'GeneratingUnit.initialP'),
+                         'SSH':()}
 
 AC_line_segment_params = ('r', 'x',
                           'length')
@@ -662,13 +666,28 @@ class Shunt:
         self.ID = ID
 
     def get_params(self, EQ_filename):
-        pass
-
+        # To be implemented
+        return 1.0
+    
 class GeneratingUnit:
-    def __init__(self, ID, EQ_filename, SSH_filename):
-        self.ID = ID
+    def __init__(self, sync_ID, EQ_filename, SSH_filename):
+        self.ID = sync_ID
+        
+    def get_params(self, EQ_filename, SSH_filename):
+        EQ_tree = ET.parse(EQ_filename).getroot()
+        SSH_tree = ET.parse(SSH_filename).getroot()
+        gen_ID = find_gen_unit(EQ_tree, self.ID)
+        sync_machine = find_element(EQ_tree, self.ID, 'SynchronousMachine')
+        gen_unit = find_element(EQ_tree, gen_ID, 'GeneratingUnit')
+        
+        
 
-
+def find_gen_unit(EQ_tree, sync_ID):
+    sync_mach = find_element(EQ_tree, sync_ID, 'SynchronousMahine')
+    res = get_resources(sync_mach)
+    gen_ID = res['RotatingMachine.GeneratingUnit']
+    generator = find_element(EQ_tree, gen_ID, 'GeneratingUnit')
+    return generator
 
 def find_connections(ID, topology, mode='first'):
     # Given an object ID and a topology list output from the get_topology function, 
