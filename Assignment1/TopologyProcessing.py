@@ -5,7 +5,7 @@ Created on Thu Apr 28 13:51:23 2022
 @author: arvidro
 """
 import xml.etree.ElementTree as ET
-from collections import deque # This is used as a stack in the tree traversal, has faster methodws than lists which is relevant for larger grids
+
 ns = {'cim':'http://iec.ch/TC57/2013/CIM-schema-cim16#',
       'entsoe':'http://entsoe.eu/CIM/SchemaExtension/3/1#',
       'rdf':'{http://www.w3.org/1999/02/22-rdf-syntax-ns#}'}
@@ -23,8 +23,9 @@ tap_changer_SSH_parameters = ('step')
 tapchanger_types = ('RatioTapChanger', 'PhaseTapChangerAsymmetrical')
 
 
-AC_line_segment_params = ('ACLineSegment.r', 'ACLineSegment.x',
-                          'Conductor.length')
+AC_line_segment_params = ('r', 'x',
+                          'length')
+EnergyConsumer_params = ('p', 'q')
 
 EQ_filename = "Assignment_EQ_reduced.xml"
 SSH_filename = "Assignment_SSH_reduced.xml"
@@ -118,11 +119,11 @@ def get_base_voltage(tree, element):
     # Find the basevoltage of an element in the EQ file tree
     VL_ID = get_voltage_level(element)
     
-    for VL in tree.findall('cim:VoltageLevel'):
+    for VL in tree.findall('cim:VoltageLevel', ns):
         if get_ID(VL) == VL_ID:
             BV_ID = get_base_voltage_ID(VL)
             break
-    for BV in tree.findall('cim:BaseVoltage'):
+    for BV in tree.findall('cim:BaseVoltage', ns):
         if get_ID(BV) == BV_ID:
             NV = BV.find('cim:BaseVoltage.nominalVoltage', ns).text
             return NV
@@ -203,7 +204,7 @@ def get_terminals(tree, element_id, CE):
 class TraversalNode:
     
     def __init__(self, ID, node_type, CE_type=None, name=None, Terminal_List=[],
-                  CE = None, CN=None, busbar_ID=None):
+                  CE = None, CN=None, busbar_ID=None, busbar_voltage=None):
         # The CE and CN attributes are None if the node is not a terminal
         # The busbar_ID attribute applies to CN that are connected to busbars
         if name is not None:
@@ -217,7 +218,7 @@ class TraversalNode:
         self.Terminal_List = Terminal_List
         self.traversed = False
         self.busbar_ID = busbar_ID
-        
+        self.busbar_voltage = busbar_voltage
         self.transformer_traversal_order = [] # used to indicate the order in which the terminals of a transformer were encountered
         
     def set_busbar_ID(self, busbar_ID):
@@ -226,7 +227,11 @@ class TraversalNode:
         # To keep track of which transformer end was traversed first for pairing
         # with the right busbar
         self.transformer_traversal_order.append(terminal_ID)
-    
+    def set_busbar_voltage(self, busbar_voltage):
+        # this is useful to have when building e.g. transformers in 
+        # pandapower, as the high, lo and medium windings have to be associated
+        # with the right bb
+        self.busbar_voltage = busbar_voltage
 def set_busbar_IDs(traversal_nodes):
     for node in traversal_nodes.values():
         if node.node_type == 'CN':
@@ -295,7 +300,12 @@ def get_nodes(tree):
                     terminal_list = {ID:False for ID in terms}
                     node = TraversalNode(ID, 'CE', CE_type=CE_type, name=name, 
                                          Terminal_List=terminal_list)
+                    if CE_type == 'BusbarSection':
+                        voltage = get_base_voltage(tree, child)
+                        node.set_busbar_voltage(voltage)
                     traversal_nodes[ID] = node
+                
+                    
     
     return traversal_nodes
 
@@ -480,7 +490,7 @@ class Transformer:
         # get the transformer ends and rated voltages, rated S for the transformer 
         tree = ET.parse(EQ_filename).getroot()
         self.transformer_ends = get_transformer_ends(tree, self.ID)
-        self.rated_S = self.terminal_end[0]['Rated_S']
+        self.rated_S = self.transformer_ends[0]['Rated_S']
         self.rated_U = [(end['Terminal'], end['Rated_U']) for end in self.transformer_ends]
         self.rated_U.sort()
         
@@ -496,7 +506,7 @@ class Transformer:
             print("Transformer has no tap changer")
         TC = find_element(EQ_tree, ID, TC_type)
         tap_changer = {'ID':ID, 'TC_type':TC_type}
-        for child in TC.iter:
+        for child in TC.iter():
             tag = child.tag.replace('{' + ns['cim'] + '}' + 'TapChanger.', '')
             RTC_tag = child.tag.replace('{' + ns['cim'] + '}' + 'RatioTapChanger', '')
             PTC_tag = child.tag.replace('{' + ns['cim'] + '}', '')
@@ -512,17 +522,38 @@ class Transformer:
         elif 'PhaseTapChanger.TransformerEnd' in res.keys():
             tap_changer['trans_end'] = res['PhaseTapChanger.TransformerEnd']
         
-        for TC in SSH_tree.findall('cim:{}'.format(TC_type)):
+        for TC in SSH_tree.findall('cim:{}'.format(TC_type), ns):
             if get_about_SSH(TC) == tap_changer['ID']:
-                step = TC.find('cim:TapChanger.step').text
+                step = TC.find('cim:TapChanger.step', ns).text
                 tap_changer['step'] = step
                 break
         self.tap_changer = tap_changer
         
+    def get_connections(self, topology_list):
+        # Find busbars connected to transformer and sort the busbars by their nominal
+        # voltage
+            
+        if len(self.transformer_ends) == 2:
+            tops = [find_connections(self.ID, topology_list)]
+        elif len(self.transformer_ends) == 3:
+            tops = find_connections(self.ID, topology_list, mode='all')
+        busbars = []
+        for top in tops:
+            for node in top:
+                if node.CE_type == 'BusbarSection':
+                    ID = node.ID
+                    u = node.busbar_voltage
+                    busbars.append((ID, float(u)))
+        busbars.sort()
+        return busbars
+                    
+            
+        
                 
 def get_about_SSH(element):        
-    about = element.attrib[ns['rdf' + 'about']].replace('#', '')
+    about = element.attrib[ns['rdf'] + 'about'].replace('#', '')
     return about
+
 class Breaker:
     
     def __init__(self, ID):
@@ -536,24 +567,44 @@ class Breaker:
         # Get breaker status from SSH-file
         root = ET.parse(filename).getroot()
         for breaker in root.findall('cim:Breaker', ns):
-            if breaker.attrib[ns['rdf'] + 'about'].replace('#', '') == self.ID:
+            if get_about_SSH(breaker) == self.ID:
                 stat = breaker.find('cim:Switch.open',ns).text
                 if stat == 'false':
                     self.set_open_status(False)
                 else:
                     self.set_open_status(True)
                 break
-
-def find_element(tree, ID, element_type):
+    def get_connections(self, topology_list):
+        top = find_connections(self.ID, topology_list)
+        for ind, node in enumerate(top):
+            if node.ID == self.ID:
+                index = ind
+                break
+        connections = {}
+        
+        for i in [-1, 1]:
+            node = top[index + i]
+            key = node.CE_type
+            ID = node.ID
+            connections[key] = ID
+        return connections
+        
+    
+def find_element(tree, ID, element_type, file_type='EQ'):
     # Find a particular element in the tree by matching ID and type
     # Implemented because this is used a __lot__
-    for  element in tree.findall('cim:{}'.format(element_type), ns):
+    for element in tree.findall('cim:{}'.format(element_type), ns):
+        if file_type == 'EQ':
             if get_ID(element) == ID:
                 return element
-class BusBar:
+        elif file_type == 'SSH':
+            if get_about_SSH(element) == ID:
+                return element
+class BusBarSection:
     def __init__(self, ID, filename=EQ_filename):
         self.ID = ID
-        
+        self.get_voltage(filename)
+        self.get_name(filename)
     def get_voltage(self, filename):
         tree = ET.parse(filename).getroot()
         bb = find_element(tree, self.ID, 'BusbarSection')
@@ -570,14 +621,78 @@ class ACLineSegment:
         self.get_parameters(EQ_filename)
     def get_parameters(self, EQ_filename):
         tree = ET.parse(EQ_filename).getroot()
-        for line in tree.findall('cim:ACLinesSegment'):
-            if get_ID(line) = self.ID:
-                break
-        for 
+        line = find_element(tree, self.ID, 'ACLineSegment')
+        parameters = {}
+        
+        for param in AC_line_segment_params:
+            if param == 'length':
+                parameters[param] = line.find('cim:Conductor.{}'.format(param), ns).text
+            else:
+                parameters[param] = line.find('cim:ACLineSegment.{}'.format(param), ns).text 
+        self.parameters = parameters
+    def get_connections(self, topology_list):
+        top = find_connections(self.ID, topology_list)
+        busbars = []
+        for node in top:
+            if node.CE_type == 'BusbarSection':
+                busbars.append(node.ID)
+        return busbars
+    
+class EnergyConsumer:
+    def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
+        self.ID = ID
+        self.get_params(SSH_filename)
+        
+    def get_params(self, SSH_filename):
+        tree = ET.parse(SSH_filename).getroot()
+        EC = find_element(tree, self.ID, 'EnergyConsumer', file_type='SSH')
+        parameters = {}
+        for param in EnergyConsumer_params:
+            parameters[param] = EC.find('cim:EnergyConsumer.{}'.format(param), ns).text
+        self.parameters = parameters
+        
+    def get_connections(self, topology_list):
+        top = find_connections(self.id, topology_list)
+        for node in top:
+            if node.CE_type == 'BusbarSection':
+                return {'BusbarSection':node.ID}
 
+class Shunt:
+    def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
+        self.ID = ID
+
+    def get_params(self, EQ_filename):
+        pass
+
+class GeneratingUnit:
+    def __init__(self, ID, EQ_filename, SSH_filename):
+        self.ID = ID
+
+
+
+def find_connections(ID, topology, mode='first'):
+    # Given an object ID and a topology list output from the get_topology function, 
+    # find the list element in the topology list containing this piece of equipment
+    if mode == 'first':
+        for top in topology:
+            for node in top:
+                if node.ID == ID:
+                    return top
+    elif mode == 'all':
+        connections = []
+        for top in topology:        
+            for node in top:
+                if node.ID == ID:
+                    connections.append(top)
+                    break
+        return connections
+    
 #tree = ET.parse('Assignment_EQ_reduced.xml')
 #root = tree.getroot()
 
 #tn = get_nodes(root)
 #set_busbar_IDs(tn)
-#topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
+topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
+Trans = Transformer('_a708c3bc-465d-4fe7-b6ef-6fa6408a62b0')
+#acls = ACLineSegment('_b58bf21a-096a-4dae-9a01-3f03b60c24c7')
+bbs = Trans.get_connections(topology)
