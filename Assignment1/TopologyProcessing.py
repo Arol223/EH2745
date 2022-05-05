@@ -659,7 +659,7 @@ class EnergyConsumer:
         top = find_connections(self.id, topology_list)
         for node in top:
             if node.CE_type == 'BusbarSection':
-                return {'BusbarSection':node.ID}
+                return node.ID
 
 class Shunt:
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
@@ -667,12 +667,17 @@ class Shunt:
 
     def get_params(self, EQ_filename):
         # To be implemented
-        return 1.0
+        self.params = {'q':1.0}
+    def get_connections(self, topology_list):
+        top = find_connections(self.ID, topology_list)
+        for node in top:
+            if node.CE_type == 'BusbarSection':
+                return node.ID
     
 class GeneratingUnit:
     def __init__(self, sync_ID, EQ_filename, SSH_filename):
         self.ID = sync_ID
-        
+        self.get_params(EQ_filename, SSH_filename)
     def get_params(self, EQ_filename, SSH_filename):
         EQ_tree = ET.parse(EQ_filename).getroot()
         SSH_tree = ET.parse(SSH_filename).getroot()
@@ -680,8 +685,25 @@ class GeneratingUnit:
         sync_machine = find_element(EQ_tree, self.ID, 'SynchronousMachine')
         gen_unit = find_element(EQ_tree, gen_ID, 'GeneratingUnit')
         
+        params = {}
         
-
+        for param in SynchronousMachine_params['EQ']:
+            value = sync_machine.find('cim:{}'.format(param), ns).text
+            params[param.split('.')[-1]] = value
+        for param in GeneratingUnit_params['EQ']:
+            value = gen_unit.find('cim:{}'.format(param), ns).text
+            params[param.split('.')[-1]] = value
+        sync_machine = find_element(SSH_tree, self.ID, 'SynchronousMachine', file_type='SSH')
+        for param in SynchronousMachine_params['SSH']:
+            value = sync_machine.find('cim:{}'.format(param), ns).text
+            params[param.split('.')[-1]] = value
+        self.parameters = params    
+    def get_connections(self, topology_list):
+        top = find_connections(self.ID, topology_list)
+        for node in top:
+            if node.CE_type == 'BusbarSection':
+                return node.ID
+        
 def find_gen_unit(EQ_tree, sync_ID):
     sync_mach = find_element(EQ_tree, sync_ID, 'SynchronousMahine')
     res = get_resources(sync_mach)
