@@ -9,8 +9,16 @@ from HelpFunctions import *
 import ParameterExtraction as pe
 import TopologyProcessing as tp
 import pandapower as pp
-from pandapower.plotting import simple_plot as plt
 from Definitions import*
+import pandapower.plotting as plot
+
+import pandapower.networks as nw 
+import matplotlib.pyplot as plt
+import os
+import seaborn
+
+colors = seaborn.color_palette()
+
 
 topology_list = tp.get_topology(EQ_filename)
 
@@ -24,13 +32,14 @@ def get_busbar_list(topology_list):
     return busbars
 
 class GridBuilder:
-    def __init__(self, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
+    def __init__(self, EQ_filename='MicroGridEQ.xml', SSH_filename='MicroGridSSH.xml'):
         
         self.EQ_filename = EQ_filename
         self.SSH_filename = SSH_filename
         self.get_topology(EQ_filename)
         self.busbar_mapping(get_busbar_list(self.topology))
         self.get_component_IDs()
+        self.make_components(EQ_filename, SSH_filename)
         
     def busbar_mapping(self, busbar_list):
         busbar_map = {}
@@ -104,11 +113,23 @@ class GridBuilder:
             breaker.to_pp(net, busbar_map, comp_ind_map)
         return net
     
-    
-GB = GridBuilder()
-GB.make_components()
+EQ_names = ('Assignment_EQ_reduced.xml', 'MicroGridEQ.xml',
+            "MicroGridTestConfiguration_T1_BE_EQ_V2.xml",
+            "MicroGridTestConfiguration_T1_NL_EQ_V2.xml",
+            "MicroGridTestConfiguration_T4_NL_EQ_V2.xml")
+SSH_names = ('Assignment_SSH_reduced.xml', 'MicroGridSSH.xml',
+            "MicroGridTestConfiguration_T1_BE_SSH_V2.xml",
+             "MicroGridTestConfiguration_T1_NL_SSH_V2.xml",
+             "MicroGridTestConfiguration_T4_NL_SSH_V2.xml")
+
+GB = GridBuilder(EQ_names[1],SSH_names[1])
+
 
 net = GB.create_net()
-plt(net, respect_switches=True)    
-    
+
+#lc = plot.create_line_collection(net, net.line.index, color="grey", zorder=1)
+#bc = plot.create_bus_collection(net, net.bus.index, size=80, color=colors[0], zorder=2)
+#plot.draw_collections([lc,bc], figsize=(8,6))
+plot.simple_plot(net,respect_switches=True, plot_loads=True,
+                 plot_line_switches=True, plot_sgens=True)   
             

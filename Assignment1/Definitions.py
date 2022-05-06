@@ -13,7 +13,8 @@ ns = {'cim':'http://iec.ch/TC57/2013/CIM-schema-cim16#',
 # transformers, as these are defined with transformer ends with a given terminal.
 conductive_equipment = ('ACLineSegment', 'BusbarSection', 'Breaker',
                         'EnergyConsumer', 'SynchronousMachine',
-                        'LinearShuntCompensator', 'PowerTransformer')
+                        'LinearShuntCompensator', 'PowerTransformer',
+                        'EquivalentInjection','EnergySource')
 tap_changer_EQ_parameters = ('lowStep', 'highStep', 'neutralStep', 
                              'normalStep', 'neutralU')
 ratio_tap_changer_EQ_parameters = ('stepVoltageIncrement')

@@ -42,7 +42,7 @@ class GeneratingUnit:
     def to_pp(self, net, busbar_mapping, component_index_map):
         bb = busbar_mapping[self.busbar]
         index = component_index_map['SynchronousMachine'][self.ID]
-        p_mw = self.parameters['p']
+        p_mw = self.parameters['p'].replace('-', '')
         pp.create_gen(net, bb, p_mw, index=index)
             
 class Transformer:
@@ -116,16 +116,27 @@ class Transformer:
     def to_pp(self, net, busbar_mapping, component_index_map):
         # This needs to be extended to create transformer from parameters instead of std type
         # and include three winding transformers. Standard type for wanted transformer specs not available
+        index = component_index_map['PowerTransformer'][self.ID]
+        sn = self.rated_S
         if len(self.busbars) == 2:
-            index = component_index_map['PowerTransformer'][self.ID]
+            
             hv_bus = busbar_mapping[self.busbars[1][0]]
             lv_bus = busbar_mapping[self.busbars[0][0]]
             lv = self.rated_U[0][1]
             hv = self.rated_U[1][1]
-            sn = self.rated_S
+            
             #std_type = "{} MVA {}/{} kV".format(int(float(sn)), int(float(hv)), int(float(lv)))
             std_type = '160 MVA 380/110 kV'
-        pp.create_transformer(net, hv_bus, lv_bus, std_type, name=self.ID, index=index)
+            pp.create_transformer(net, hv_bus, lv_bus, std_type, name='trafo', index=index)
+        elif len(self.busbars) == 3:
+            std_type = '63/25/38 MVA 110/20/10 kV'
+            lv_bus = busbar_mapping[self.busbars[0][0]]
+            mv_bus = busbar_mapping[self.busbars[1][0]]
+            hv_bus = busbar_mapping[self.busbars[2][0]]
+            lv = self.rated_U[0][1]
+            mv = self.rated_U[1][1]
+            hv = self.rated_U[0][1]
+            pp.create_transformer3w(net, hv_bus, mv_bus, lv_bus, std_type, name='trafo', index=index)
         
 class BusBarSection:
     def __init__(self, ID, filename=EQ_filename):
@@ -144,7 +155,7 @@ class BusBarSection:
     def to_pp(self, net, busbar_mapping, component_index_map):
         # add this busbar to a pandapower net
         index = busbar_mapping[self.ID]
-        pp.create_bus(net, self.NV, name=self.name,index=index)
+        pp.create_bus(net, self.NV, name=self.name,index=index, type='b')
         
 class ACLineSegment:
     def __init__(self, ID, EQ_filename=EQ_filename):
@@ -272,10 +283,10 @@ class Breaker:
             el = busbar_mapping[self.busbars[1]]
         elif self.et == 't':
             key = 'PowerTransformer'
-            
+            el = component_index_map[key][self.connections[key]]
         elif self.et == 'l':
             key = 'ACLineSegment'
-        el = component_index_map[key][self.connections[key]]
+            el = component_index_map[key][self.connections[key]]
         pp.create_switch(net, bb, el, self.et, index=index, closed=not self.open)
                 
         
