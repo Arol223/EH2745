@@ -17,9 +17,9 @@ class GeneratingUnit:
     def get_params(self, EQ_filename, SSH_filename):
         EQ_tree = ET.parse(EQ_filename).getroot()
         SSH_tree = ET.parse(SSH_filename).getroot()
-        gen_ID = find_gen_unit(EQ_tree, self.ID)
+        gen_unit = find_gen_unit(EQ_tree, self.ID)
         sync_machine = find_element(EQ_tree, self.ID, 'SynchronousMachine')
-        gen_unit = find_element(EQ_tree, gen_ID, 'GeneratingUnit')
+        
         
         params = {}
         
@@ -40,7 +40,7 @@ class GeneratingUnit:
             if node.CE_type == 'BusbarSection':
                 self.busbar = node.ID
     def to_pp(self, net, busbar_mapping, component_index_map):
-        bb = busbar_mapping(self.busbar)
+        bb = busbar_mapping[self.busbar]
         index = component_index_map['SynchronousMachine'][self.ID]
         p_mw = self.parameters['p']
         pp.create_gen(net, bb, p_mw, index=index)
@@ -115,15 +115,16 @@ class Transformer:
     
     def to_pp(self, net, busbar_mapping, component_index_map):
         # This needs to be extended to create transformer from parameters instead of std type
-        # and include three winding transformers
+        # and include three winding transformers. Standard type for wanted transformer specs not available
         if len(self.busbars) == 2:
             index = component_index_map['PowerTransformer'][self.ID]
             hv_bus = busbar_mapping[self.busbars[1][0]]
             lv_bus = busbar_mapping[self.busbars[0][0]]
-            lv = self.rated_U[0]
-            hv = self.rated_U[1]
+            lv = self.rated_U[0][1]
+            hv = self.rated_U[1][1]
             sn = self.rated_S
-            std_type = "{} MVA {}/{} kV".format(sn, hv, lv)
+            #std_type = "{} MVA {}/{} kV".format(int(float(sn)), int(float(hv)), int(float(lv)))
+            std_type = '160 MVA 380/110 kV'
         pp.create_transformer(net, hv_bus, lv_bus, std_type, name=self.ID, index=index)
         
 class BusBarSection:
@@ -189,7 +190,7 @@ class EnergyConsumer:
         self.parameters = parameters
         
     def get_connections(self, topology_list):
-        top = find_connections(self.id, topology_list)
+        top = find_connections(self.ID, topology_list)
         for node in top:
             if node.CE_type == 'BusbarSection':
                 self.busbar = node.ID
@@ -203,10 +204,11 @@ class EnergyConsumer:
 class Shunt:
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
         self.ID = ID
-
+        self.get_params(EQ_filename)
     def get_params(self, EQ_filename):
         # To be implemented
-        self.params = {'q':1.0}
+        #self.params = {'q':1.0}
+        self.q = 1
     def get_connections(self, topology_list):
         top = find_connections(self.ID, topology_list)
         for node in top:
@@ -221,10 +223,10 @@ class Shunt:
         
 class Breaker:
     
-    def __init__(self, ID):
+    def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
         self.ID = ID
         self.open = False
-    
+        self.get_status(SSH_filename)
     def set_open_status(self, open_):
         self.open = open_
         
@@ -246,12 +248,42 @@ class Breaker:
                 index = ind
                 break
         connections = {}
-        
+        busbars = []
         for i in [-1, 1]:
             node = top[index + i]
             key = node.CE_type
             ID = node.ID
+            if key == 'BusbarSection':
+                busbars.append(ID)
+                continue
+            elif key == 'PowerTransformer':
+                self.et = 't'
+            elif key == 'ACLineSegment':
+                self.et = 'l'
             connections[key] = ID
+        if len(busbars) > 1:
+            self.et = 'b'
+        self.busbars = busbars
         self.connections = connections
-    def to_pp(self, busbar_mapping, component_index_map):
+    def to_pp(self, net, busbar_mapping, component_index_map):
         index = component_index_map['Breaker'][self.ID]
+        bb = busbar_mapping[self.busbars[0]]
+        if self.et == 'b':
+            el = busbar_mapping[self.busbars[1]]
+        elif self.et == 't':
+            key = 'PowerTransformer'
+            
+        elif self.et == 'l':
+            key = 'ACLineSegment'
+        el = component_index_map[key][self.connections[key]]
+        pp.create_switch(net, bb, el, self.et, index=index, closed=not self.open)
+                
+        
+        
+        
+        
+        
+        
+        
+        
+        

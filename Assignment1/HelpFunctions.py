@@ -8,7 +8,7 @@ Created on Thu May  5 16:05:58 2022
 from Definitions import *
 
 def find_gen_unit(EQ_tree, sync_ID):
-    sync_mach = find_element(EQ_tree, sync_ID, 'SynchronousMahine')
+    sync_mach = find_element(EQ_tree, sync_ID, 'SynchronousMachine')
     res = get_resources(sync_mach)
     gen_ID = res['RotatingMachine.GeneratingUnit']
     generator = find_element(EQ_tree, gen_ID, 'GeneratingUnit')

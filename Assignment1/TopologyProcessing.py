@@ -154,7 +154,7 @@ def get_topology(filename):
     root = ET.parse(filename).getroot()
     traversal_nodes = get_nodes(root)
     set_busbar_IDs(traversal_nodes)
-    print_node_types(traversal_nodes)
+    #print_node_types(traversal_nodes)
     CN_stack = []#deque()
     CE_stack = []#deque()
     all_ce = []
@@ -218,7 +218,7 @@ def get_topology(filename):
                     CE_stack.append(traversal_nodes[busbar_ID])
                     previous_node = current_node
                     current_node = next_node
-                    print_topology(topology)
+                    #print_topology(topology)
                 
             elif next_node.node_type == 'CE':
                 previous_node = current_node
@@ -243,7 +243,7 @@ def get_topology(filename):
             if not found_non_traversed:
                 if len(CE_stack) > 2:
                     topology.append(CE_stack)
-                    print_topology(topology, index=-1)
+                    #print_topology(topology, index=-1)
                     CE_stack = []#deque()
                 CN_stack.pop()
                 current_node = CN_stack[-1]
@@ -276,8 +276,8 @@ def get_topology(filename):
                     break
             if not found_non_traversed:
                 topology.append(CE_stack)
-                if len(CE_stack) > 2:
-                    print_topology(topology, index=-1)
+                #if len(CE_stack) > 2:
+                    #print_topology(topology, index=-1)
                 CE_stack = []#deque()
                 current_node = CN_stack[-1]
                 bb_ID = current_node.busbar_ID
@@ -299,7 +299,7 @@ def get_topology(filename):
 
 #tn = get_nodes(root)
 #set_busbar_IDs(tn)
-topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
+#topology, everything_stack = get_topology('Assignment_EQ_reduced.xml')
 #Trans = Transformer('_a708c3bc-465d-4fe7-b6ef-6fa6408a62b0')
 #acls = ACLineSegment('_b58bf21a-096a-4dae-9a01-3f03b60c24c7')
 #bbs = Trans.get_connections(topology)
