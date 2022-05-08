@@ -46,6 +46,8 @@ def get_about_SSH(element):
     about = element.attrib[ns['rdf'] + 'about'].replace('#', '')
     return about
 
+
+
 def get_terminals(tree, element_id, CE):
     """
     
