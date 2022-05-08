@@ -45,7 +45,7 @@ def main():
                               ext_grid_color='y', switch_color='k', library='igraph',\
                               show_plot=True, ax=None)
     except:
-        print("Something went wrong while trying to build a grid, choose a different file or exit.")
+        print("Something went wrong while trying to build a grid, choose a different file")
         
         # cont = input("Continue? [y]/[n]")
         # if cont == 'n':
