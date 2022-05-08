@@ -130,6 +130,11 @@ net = GB.create_net()
 #lc = plot.create_line_collection(net, net.line.index, color="grey", zorder=1)
 #bc = plot.create_bus_collection(net, net.bus.index, size=80, color=colors[0], zorder=2)
 #plot.draw_collections([lc,bc], figsize=(8,6))
-plot.simple_plot(net,respect_switches=True, plot_loads=True,
-                 plot_line_switches=True, plot_sgens=True)   
+plot.simple_plot(net, respect_switches=True, line_width=1.0, bus_size=1.0, \
+                     ext_grid_size=1.0, trafo_size=1.0, plot_loads=True, \
+                     plot_sgens=True, load_size=2.0, sgen_size=2.0, switch_size=1.0,\
+                     switch_distance=1.0, plot_line_switches=True, scale_size=True, \
+                     bus_color='b', line_color='grey', trafo_color='k',\
+                     ext_grid_color='y', switch_color='k', library='igraph',\
+                     show_plot=True, ax=None)  
             
