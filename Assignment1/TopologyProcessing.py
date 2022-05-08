@@ -7,6 +7,7 @@ Created on Thu Apr 28 13:51:23 2022
 import xml.etree.ElementTree as ET
 from HelpFunctions import *
 from Definitions import *
+from random import choice
 
 class TraversalNode:
     
@@ -29,7 +30,8 @@ class TraversalNode:
         self.transformer_traversal_order = [] # used to indicate the order in which the terminals of a transformer were encountered
         
     def set_busbar_ID(self, busbar_ID):
-        self.busbar_ID = busbar_ID
+        self.busbar_ID = []
+        self.busbar_ID.append(busbar_ID)
     def traverse_transformer(self, terminal_ID):
         # To keep track of which transformer end was traversed first for pairing
         # with the right busbar
@@ -46,7 +48,7 @@ def set_busbar_IDs(traversal_nodes):
                 CE = traversal_nodes[traversal_nodes[term].CE]
                 if traversal_nodes[traversal_nodes[term].CE].CE_type == 'BusbarSection':
                     node.set_busbar_ID({'Busbar':CE.ID, 'Terminal':term})
-                    break
+                    #break
         
 def get_terminal_parents(terminal):
     res = get_resources(terminal)
@@ -80,11 +82,15 @@ def print_node_types(traversal_nodes):
         if node.node_type == 'CE':
             print('Node object is a: ' + node.CE_type)
             
-def get_nodes(tree):
+def get_nodes(tree, conductive_equipment=conductive_equipment):
     traversal_nodes = {}
     for child in tree.iter():
-        if child.tag == '{' + ns['cim']  + '}' + 'ConnectivityNode':
+        try:
             ID = get_ID(child)
+        except KeyError:
+            continue
+        if child.tag == '{' + ns['cim']  + '}' + 'ConnectivityNode':
+            #ID = get_ID(child)
             terms = get_terminals(tree, ID, CE=False)
 
             
@@ -94,10 +100,10 @@ def get_nodes(tree):
                                  Terminal_List=terminal_list)
             traversal_nodes[ID] = node
         elif child.tag == '{' + ns['cim']  + '}' + 'Terminal':
-            ID = get_ID(child)
+            
             parents = get_terminal_parents(child)
             node = TraversalNode(ID, 'Te', **parents)
-            traversal_nodes[ID] = node
+            traversal_nodes[ID] = node            
         else:
             for CE_type in conductive_equipment:
                 if child.tag == '{' + ns['cim'] + '}' + CE_type:
@@ -149,10 +155,12 @@ def find_CE(filename='Assignment_EQ_reduced.xml'):
                 CE_types.append(tag)
     return CE_types
 
-def get_topology(filename):
+def get_topology(filename, include_connectivity_nodes=False,
+                 conductive_equipment=conductive_equipment,
+                 break_no_CN=False):
     # process topology from a cim-xml file, follows proposed algo from provided paper 
     root = ET.parse(filename).getroot()
-    traversal_nodes = get_nodes(root)
+    traversal_nodes = get_nodes(root,conductive_equipment)
     set_busbar_IDs(traversal_nodes)
     #print_node_types(traversal_nodes)
     CN_stack = []#deque()
@@ -172,22 +180,24 @@ def get_topology(filename):
     loop_number = 0
     while len(everything_stack) < len(traversal_nodes):
         loop_number += 1
-        # print('Number of iterations: {}'.format(loop_number))
+        #print('Number of iterations: {}'.format(loop_number))
         # print("Length of everything_stack: {}".format(len(everything_stack)))
         # print("Found CE: {}".format(len(all_ce)))
-        #next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+        # next_node = traversal_nodes[find_next_node(previous_node, current_node)]
         # print(previous_node.node_type)
         # print(current_node.node_type)
         #print(next_node.node_type)
         previous_ID = previous_node.ID
         current_id = current_node.ID
         if current_node.node_type == 'Te':
-            next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+            next_node = traversal_nodes[find_next_node(previous_node, current_node)]     
             previous_node.Terminal_List[current_id] = True # Indicate that the terminal has been traversed
             #next_node.Terminal_List[current_id] = True
+                
             if current_node not in everything_stack:
                 everything_stack.append(current_node)
             if next_node.node_type == 'CN':
+                
                 if next_node not in CN_stack:
                     CN_stack.append(next_node)
                 # Option 1: CN is not attached to a busbar
@@ -199,7 +209,10 @@ def get_topology(filename):
                 
                 # Option 2: CN is attached to a busbar
                 else:
-                    busbar = traversal_nodes[next_node.ID].busbar_ID
+                    if include_connectivity_nodes:
+                        # Whether to include conectivity nodes in plotting
+                        CE_stack.append(next_node)
+                    busbar = choice(traversal_nodes[next_node.ID].busbar_ID)
                     terminal_ID = busbar['Terminal']
                     busbar_ID = busbar['Busbar']
                     bb = traversal_nodes[busbar_ID]
@@ -226,16 +239,28 @@ def get_topology(filename):
                 
         
         elif current_node.node_type == 'CN':
+            # Set the flag to indicate terminal has been traversed
+            if include_connectivity_nodes:
+                CE_stack.append(current_node)
             if previous_ID in current_node.Terminal_List.keys():
                 current_node.Terminal_List[previous_ID] = True
+            # Add to CN-stack if not in stack already
             if current_node not in CN_stack:
                 CN_stack.append(current_node)
+            # Add to everything stack if encountered for the first time
             if current_node not in everything_stack:
                 everything_stack.append(current_node)
             found_non_traversed = False
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+                    # try:
+                    #     nnext_node = traversal_nodes[find_next_node(current_node, next_node)]
+                    # except KeyError:
+                    #     print("Warning: Could not find CE for next terminal in file.")
+                    #     print("This branch will be ignored.")
+                    #     current_node.Terminal_List[next_node]=True # Next node is dead, so count as traversed
+                    #     continue
                     previous_node = current_node
                     current_node = next_node
                     found_non_traversed = True
@@ -246,8 +271,27 @@ def get_topology(filename):
                     #print_topology(topology, index=-1)
                     CE_stack = []#deque()
                 CN_stack.pop()
-                current_node = CN_stack[-1]
-                #next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+                try:
+                    current_node = CN_stack[-1]
+                except IndexError:
+                    if not break_no_CN:
+                        for node in traversal_nodes.values():
+                            if (node.node_type == 'CN' and
+                                node not in everything_stack):
+                                current_node = node
+                                everything_stack.append(current_node)
+                                break
+                        print("Could not resolve topology due to missing or mislabeled nodes.")
+                        break
+                    else:
+                        found = len(everything_stack)
+                        tot = len(traversal_nodes)
+                        print("Ran out of connectivity nodes.")
+                        print("Total nodes traversed: {}".format(len(everything_stack)))
+                        print("Number of nodes left: {}".format(tot-found))
+                        print("Breaking iteration")
+                        break
+#                next_node = traversal_nodes[find_next_node(previous_node, current_node)]
             
         elif current_node.node_type == 'CE':
             if current_node not in all_ce:
@@ -266,12 +310,24 @@ def get_topology(filename):
             for term, trav in current_node.Terminal_List.items():
                 if not trav:
                     next_node = traversal_nodes[find_next_node(previous_node, current_node)]
+                    try:
+                        # next next node. This is needed if the EQ file
+                        # is missing a connectivity node
+                        nnext_node = traversal_nodes[find_next_node(current_node, next_node)]
+                    except KeyError:
+                        print("Warning: Could not find CN for next terminal in file.")
+                        print("This branch will be ignored.")
+                        current_node.Terminal_List[next_node.ID]=True # next node is dead, so mark as traversed
+                        if next_node not in everything_stack:
+                            everything_stack.append(traversal_nodes[next_node.ID])
+                        continue
                     if current_node.CE_type == 'PowerTransformer':
                         # adding the next node here in case an odd number of terminals 
                         # exist, e.g. three winding trafo.
                         current_node.traverse_transformer(next_node.ID)
                     previous_node = current_node
                     current_node = next_node
+                    
                     found_non_traversed = True
                     break
             if not found_non_traversed:
@@ -282,6 +338,7 @@ def get_topology(filename):
                 current_node = CN_stack[-1]
                 bb_ID = current_node.busbar_ID
                 if bb_ID is not None:
+                    bb_ID = choice(bb_ID)
                     CE_stack.append(traversal_nodes[bb_ID['Busbar']]) # Add the busbar if one exists
     return topology, everything_stack
     

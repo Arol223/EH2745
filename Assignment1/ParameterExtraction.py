@@ -43,7 +43,7 @@ class GeneratingUnit:
         bb = busbar_mapping[self.busbar]
         index = component_index_map['SynchronousMachine'][self.ID]
         p_mw = self.parameters['p'].replace('-', '')
-        pp.create_gen(net, bb, p_mw, index=index)
+        pp.create_sgen(net, bb, p_mw, index=index)
             
 class Transformer:
     
@@ -109,7 +109,10 @@ class Transformer:
                 if node.CE_type == 'BusbarSection':
                     ID = node.ID
                     u = node.busbar_voltage
-                    busbars.append((ID, float(u)))
+                    if u is not None:
+                        busbars.append((ID, float(u)))
+                    else: 
+                        busbars.append((ID, 440.0))
         busbars.sort()
         self.busbars = busbars
     
@@ -141,7 +144,10 @@ class Transformer:
 class BusBarSection:
     def __init__(self, ID, filename=EQ_filename):
         self.ID = ID
-        self.get_voltage(filename)
+        try:
+            self.get_voltage(filename)
+        except TypeError:
+            self.NV = 440.0
         self.get_name(filename)
     def get_voltage(self, filename):
         tree = ET.parse(filename).getroot()
@@ -180,8 +186,14 @@ class ACLineSegment:
                 busbars.append(node.ID)
         self.busbars = busbars
     def to_pp(self, net, busbar_mapping, component_index_map):
-        bb0 = busbar_mapping[self.busbars[0]]
-        bb1 = busbar_mapping[self.busbars[1]]
+        try:
+            bb0 = busbar_mapping[self.busbars[0]]
+            bb1 = busbar_mapping[self.busbars[1]]
+        except IndexError:
+            print("Could not find both busbars for this line segment.")
+            print("ID of segment: {}".format(self.ID))
+            print("Check EQ-file, there might be missing nodes")
+            return -1
         length = self.parameters['length']
         index = component_index_map['ACLineSegment'][self.ID]
         std_type = "NAYY 4x50 SE"
@@ -205,12 +217,19 @@ class EnergyConsumer:
         for node in top:
             if node.CE_type == 'BusbarSection':
                 self.busbar = node.ID
-    def to_pp(self, net, busbar_mapping, component_index_map):
+    def to_pp(self, net, busbar_mapping, component_index_map, CE_type='EnergyConsumer'):
         bb = busbar_mapping[self.busbar]
         index = component_index_map['EnergyConsumer'][self.ID]
         p_mw = self.parameters['p']
         q_mvar = self.parameters['q']
-        pp.create_load(net, bb, p_mw, q_mvar=q_mvar, index=index)
+        pp.create_load(net, bb, p_mw, q_mvar=q_mvar, index=index,name=CE_type)
+        
+class NotImplementedCe(EnergyConsumer):
+    def __init__(self, ID, EQ_filename, SSH_filename, CE_type):
+        super().__init__(ID, EQ_filename, SSH_filename)
+        self.CE_type = CE_type
+    def get_params(self, SSH_filename):
+        self.parameters = {'p':10, 'q':10}     
         
 class Shunt:
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
@@ -230,8 +249,8 @@ class Shunt:
         bb = busbar_mapping[self.busbar]
         index = component_index_map['LinearShuntCompensator'][self.ID]
         q_mvar = self.q
-        pp.create_shunt(net, bb, q_mvar, index = index)
-        
+        #pp.create_shunt(net, bb, q_mvar, index = index)
+        pp.create_shunt(net, bb, p_mw=1, q_mvar=q_mvar, index=index)
 class Breaker:
     
     def __init__(self, ID, EQ_filename=EQ_filename, SSH_filename=SSH_filename):

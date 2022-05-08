@@ -11,6 +11,7 @@ import TopologyProcessing as tp
 import pandapower as pp
 from Definitions import*
 import pandapower.plotting as plot
+from pandapower.plotting.plotly import simple_plotly
 
 import pandapower.networks as nw 
 import matplotlib.pyplot as plt
@@ -20,7 +21,7 @@ import seaborn
 colors = seaborn.color_palette()
 
 
-topology_list = tp.get_topology(EQ_filename)
+
 
 def get_busbar_list(topology_list):
     busbars = []
@@ -47,12 +48,15 @@ class GridBuilder:
             busbar_map['{}'.format(bb)] = i
         self.busbar_map = busbar_map
     def get_topology(self, EQ_filename):
-        self.topology, e_stack = tp.get_topology(EQ_filename)
+        self.CE = tp.find_CE(EQ_filename) # Make sure all types of CE are included, even if not yet implemented
+        self.topology, e_stack = tp.get_topology(EQ_filename,
+                                                 include_connectivity_nodes=False,
+                                                 conductive_equipment=self.CE)
     
     def get_component_IDs(self):
         components = {}
         n_components = 0
-        for CE_type in conductive_equipment:
+        for CE_type in self.CE:
             components[CE_type] = []
         for top in self.topology:
             for node in top:
@@ -64,9 +68,9 @@ class GridBuilder:
         self.n_components = n_components
         
     def make_components(self, EQ_filename=EQ_filename, SSH_filename=SSH_filename):
-        components = {key:[] for key in conductive_equipment}
+        components = {key:[] for key in self.CE}
         indices = (i for i in range(len(self.busbar_map), self.n_components))
-        comp_ind_map = {key:{} for key in conductive_equipment}
+        comp_ind_map = {key:{} for key in self.CE}
         for key, IDs in self.component_IDs.items():
             
             
@@ -91,6 +95,9 @@ class GridBuilder:
                     comp = pe.Shunt(ID, EQ_filename, SSH_filename)
                 elif key == 'PowerTransformer':
                     comp = pe.Transformer(ID, EQ_filename, SSH_filename)
+                else:
+                    comp = pe.NotImplementedCe(ID, EQ_filename, SSH_filename,
+                                               CE_type=key)
                 if key != 'BusbarSection':
                     comp.get_connections(self.topology)
                 components[key].append(comp)
@@ -113,28 +120,28 @@ class GridBuilder:
             breaker.to_pp(net, busbar_map, comp_ind_map)
         return net
     
-EQ_names = ('Assignment_EQ_reduced.xml', 'MicroGridEQ.xml',
-            "MicroGridTestConfiguration_T1_BE_EQ_V2.xml",
-            "MicroGridTestConfiguration_T1_NL_EQ_V2.xml",
-            "MicroGridTestConfiguration_T4_NL_EQ_V2.xml")
-SSH_names = ('Assignment_SSH_reduced.xml', 'MicroGridSSH.xml',
-            "MicroGridTestConfiguration_T1_BE_SSH_V2.xml",
-             "MicroGridTestConfiguration_T1_NL_SSH_V2.xml",
-             "MicroGridTestConfiguration_T4_NL_SSH_V2.xml")
+# EQ_names = ('Assignment_EQ_reduced.xml', 'MicroGridEQ.xml',
+#             "MicroGridTestConfiguration_T1_BE_EQ_V2.xml",
+#             "MicroGridTestConfiguration_T1_NL_EQ_V2.xml",
+#             "MicroGridTestConfiguration_T4_NL_EQ_V2.xml")
+# SSH_names = ('Assignment_SSH_reduced.xml', 'MicroGridSSH.xml',
+#             "MicroGridTestConfiguration_T1_BE_SSH_V2.xml",
+#              "MicroGridTestConfiguration_T1_NL_SSH_V2.xml",
+#              "MicroGridTestConfiguration_T4_NL_SSH_V2.xml")
 
-GB = GridBuilder(EQ_names[1],SSH_names[1])
+# GB = GridBuilder(EQ_names[1],SSH_names[1])
 
 
-net = GB.create_net()
 
-#lc = plot.create_line_collection(net, net.line.index, color="grey", zorder=1)
-#bc = plot.create_bus_collection(net, net.bus.index, size=80, color=colors[0], zorder=2)
-#plot.draw_collections([lc,bc], figsize=(8,6))
-plot.simple_plot(net, respect_switches=True, line_width=1.0, bus_size=1.0, \
-                     ext_grid_size=1.0, trafo_size=1.0, plot_loads=True, \
-                     plot_sgens=True, load_size=2.0, sgen_size=2.0, switch_size=1.0,\
-                     switch_distance=1.0, plot_line_switches=True, scale_size=True, \
-                     bus_color='b', line_color='grey', trafo_color='k',\
-                     ext_grid_color='y', switch_color='k', library='igraph',\
-                     show_plot=True, ax=None)  
+# net = GB.create_net()
+
+
+
+# plot.simple_plot(net, respect_switches=False, line_width=1.0, bus_size=1.0, \
+#                       ext_grid_size=1.0, trafo_size=1.0, plot_loads=True, \
+#                       plot_sgens=True, load_size=2.0, sgen_size=2.0, switch_size=1.0,\
+#                       switch_distance=1.0, plot_line_switches=True, scale_size=True, \
+#                       bus_color='b', line_color='grey', trafo_color='k',\
+#                       ext_grid_color='y', switch_color='k', library='igraph',\
+#                       show_plot=True, ax=None)  
             
