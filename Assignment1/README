@@ -30,6 +30,11 @@ as extracting topological information as outputted by the get_topology() functio
 Each class implements a to_pp() method which, given a pandapower net object as an input, uses the parameters and topological information gathered adds a relevant
 item to the net. 
 ---------------
+The GridBuilding module defines a class that reads an EQ and an SSH file and extracts the topology of the net and parameters of the different objects using the functions 
+and classes defined in the ParameterExtraction and TopologyProcessing modules. It can then create a pandapower net object containing the objects and topology found.
+
+
+_______________
 The Definitions module contains some pre-defined variables, for example the name-spaces used in the xml-files. 
 ---------------
 Finally, the main module just contains a main function, which prompts the user for a file index to use, and tries to create a grid model from an xml-file corresponding to the index.
