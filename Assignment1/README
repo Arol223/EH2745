@@ -1,0 +1,38 @@
+The assignment code is contained in the following modules (files):
+  HelpFunctions.py
+  TopologyProcessing.py
+  ParameterExtraction.py
+  GridBuilding.py
+  main.py
+  Definitions.py
+---------------
+The HelpFunctions module contains mainly convenience functions that make working with the xml-files easier. 
+Some examples are: 
+  get_ID(element)
+  find_element(tree, ID, element_type)
+  get_terminals(tree, element_ID, CE)
+  etc.
+The get_ID function outputs the rdf-ID of an element of the xml-tree. 
+The find_element function finds an element in the xml-tree by the ID and element type (e.g. BusbarSection)
+The get_terminals function finds the terminals connected to an element by going through the terminals in the xml-file and checking if they are connected 
+to the element by the element's rdf-ID. 
+
+---------------
+
+The TopologyProcessing module implements the TraversalNode class (as suggested in https://www.researchgate.net/publication/307888085_An_efficient_method_of_extracting_network_information_from_CIM_asset_model)
+as well as the tree traversal algorithm described in that same paper. 
+
+---------------
+
+The ParameterExtraction module defines classes describing the conductive equipment found in the xml-file for the reduced 5-bus system as well as the 
+9-bus system given for the assignment. These classes contain methods for extracting parameters for the conducting equipment found in the EQ and SSH-files, as well
+as extracting topological information as outputted by the get_topology() function of the TopologyProcessing module. 
+Each class implements a to_pp() method which, given a pandapower net object as an input, uses the parameters and topological information gathered adds a relevant
+item to the net. 
+---------------
+The Definitions module contains some pre-defined variables, for example the name-spaces used in the xml-files. 
+---------------
+Finally, the main module just contains a main function, which prompts the user for a file index to use, and tries to create a grid model from an xml-file corresponding to the index.
+
+-
+
