@@ -119,13 +119,15 @@ def setup_network(x_line=[], x_load=[], x_gen=[]):
     return net
 
 if __name__ == '__main__':
-    p_n_loads = [90, 100, 125]
-    q_n_loads = [30, 35, 50]
-    noise_level = 0
+    p_n_loads = [90, 100, 125]#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
+    
+    q_n_loads = [30, 35, 50]#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
+    noise_level = 0.1
     x_line = []
     x_load = []
-    x_gen = []
-    output_dir = "Simulation_results/"
-    output_name = "Test"
-    run_sim(output_dir + output_name, 24, p_n_loads, q_n_loads, noise_level,
+    x_gen = [1]
+    output_dir = "Simulation_results_temp/"
+    output_name = "Gen2_disconn"
+    time_steps = 70
+    run_sim(output_dir + output_name, time_steps, p_n_loads, q_n_loads, noise_level,
             x_line, x_load, x_gen)
