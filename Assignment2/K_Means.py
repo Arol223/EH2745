@@ -17,10 +17,10 @@ class KMeans:
     
     def __init__(self, *args, **kwargs):   
         self.load_data()
-        self.scale_data()
+        self.data = self.scale_data()
     
     def load_data(self):
-        self.data = get_all()
+        self.data = get_all(include_class=False)
         
     def normalise_data(self):
         data = self.data
@@ -39,13 +39,16 @@ class KMeans:
         self.data = data
         self.means = means 
         self.stds = stds 
-    def scale_data(self):
+    def scale_data(self, in_data=None):
+        if in_data is None:
+            in_data = self.data
         scaler = MinMaxScaler()
-        data = self.data.to_numpy()
-        data = scaler.fit_transform(data,)
-        self.data.iloc[:,:] = data
+        data = in_data.to_numpy()
+        data = scaler.fit_transform(data)
+        in_data.iloc[:,:] = data
         self.scaler = scaler         
-        
+        return in_data
+    
     def get_inverse_norm_data(self):
         
         data = self.data
@@ -66,17 +69,19 @@ class KMeans:
     
     def init_centroids(self, n_clusters):
         dims = self.data.shape[1]
-        self.centroids = rand([dims, n_clusters])
-        self.n_clusters = n_clusters
-        return self.centroids
+        centroids = rand([dims, n_clusters])
+
+        return centroids
     
-    def assign_clusters(self, centroids=None, data=None):
+    def assign_clusters(self, centroids=None, data=None, scale=True):
         if centroids is None:
             centroids = self.centroids
         n_clusters = centroids.shape[1]
         dims = centroids.shape[0]
         if data is None:
             data = self.data
+        if scale:
+            data = self.scale_data(data)
         data = data.to_numpy()
         diffs = np.array([ # get the differences to be able to assign centroids
             data - centroids[:, i].reshape([1, dims]) for i in range(n_clusters)
@@ -84,6 +89,7 @@ class KMeans:
         
         norms = np.linalg.norm(diffs, axis=2) # Calculate 2 norms for all the vectors
         clusters = np.argmin(norms, axis=0) # Cluster is the index of the smallest norm
+
         return pd.Series(clusters, name="Cluster")
     
     def calculate_loss(self, centroids=None, data=None, clusters=None):
@@ -99,11 +105,13 @@ class KMeans:
         loss = 0
         for i in range(n_clusters):
             try:
-                points = data.loc[i]
+                points = data.loc[[i]]
                 diffs = np.sqrt((points - centroids[:,i].reshape([1, dims])) ** 2)
                 loss += np.sum(np.sum(diffs))
             except KeyError:
-                continue
+                continue      
+                
+
         return loss
     def update_centroids(self, centroids=None, data=None, clusters=None):
         if centroids is None:
@@ -146,7 +154,6 @@ class KMeans:
         losses = []
         for i in range(n_iter):
             centroids = self.init_centroids(n_centroids)
-            
             centroids, loss = self.run_clustering(
                 tol=tol, data=data, centroids=centroids
                 )
@@ -176,7 +183,7 @@ class KMeans:
                 return i - 1
 if __name__ == '__main__':
     km = KMeans()
-    centroids, losses = km.find_optimal_n_centroids([1, 11])
-    plt.plot(np.arange(1,11), losses)
+    centroids, losses = km.find_optimal_n_centroids([1, 12])
+    plt.plot(np.arange(1,12), losses)
     plt.xlabel("Number of clusters")
     plt.ylabel("Loss")

@@ -11,8 +11,8 @@ import pandas as pd
 
 data_folder = "Simulation_results_temp/"
 
-cases = ("Gen2_disconn", "High Load", "Line_5-6_disconn", "Low Load",
-         "Normal")
+cases = ("Gen2_disconn", "Line_5-6_disconn", "Gen3_disconn",
+         "Normal", "High 30% Load", "Low -30% Load",)
 variables = ("va_degree", "vm_pu")
 folder_name = "res_bus/"
 
@@ -27,10 +27,17 @@ def get_case(case):
     out_df = pd.concat([vm, va], axis=1)
     return out_df    
 
-def get_all(cases=cases):
+def get_all(cases=cases, include_class=True):
     frames = []
-    for case in cases:
+    for i, case in enumerate(cases):
         frames.append(get_case(case))
+        if include_class:
+            frames[i]["Class"] = [i] * frames[i].shape[0]
     return pd.concat(frames, ignore_index=True)
 
+def case_to_class(case):
+    for i, c in enumerate(cases):
+        if c == case:
+            return i 
+    
 get_all()

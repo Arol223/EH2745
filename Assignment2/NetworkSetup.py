@@ -6,7 +6,7 @@ Created on Mon May 30 10:49:53 2022
 """
 
 import numpy as np
-from numpy.random import random as rand
+from numpy.random import random as randn
 import pandas as pd
 
 import pandapower as pp
@@ -52,10 +52,10 @@ def create_data_source(n_timesteps, p_n_loads, q_n_loads, noise_level):
     profiles = pd.DataFrame()
     
     for i, p in enumerate(p_n_loads):
-        profiles['load{}_p'.format(i)] = p*np.ones(n_timesteps) + rand(n_timesteps)*p*noise_level
+        profiles['load{}_p'.format(i)] = p*np.ones(n_timesteps) + randn(n_timesteps)*p*noise_level
         
     for i, q in enumerate(q_n_loads):
-        profiles['load{}_q'.format(i)] = q*np.ones(n_timesteps) + rand(n_timesteps)*q*noise_level
+        profiles['load{}_q'.format(i)] = q*np.ones(n_timesteps) + randn(n_timesteps)*q*noise_level
     
     ds = DFData(profiles)
     return profiles, ds
@@ -119,15 +119,15 @@ def setup_network(x_line=[], x_load=[], x_gen=[]):
     return net
 
 if __name__ == '__main__':
-    p_n_loads = [90, 100, 125]#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
+    p_n_loads = np.array([90, 100, 125])*1#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
     
-    q_n_loads = [30, 35, 50]#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
+    q_n_loads = np.array([30, 35, 50])*1#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
     noise_level = 0.1
-    x_line = []
+    x_line = [2]
     x_load = []
-    x_gen = [1]
+    x_gen = []
     output_dir = "Simulation_results_temp/"
-    output_name = "Gen2_disconn"
+    output_name = "Line_5-6_disconn"
     time_steps = 70
     run_sim(output_dir + output_name, time_steps, p_n_loads, q_n_loads, noise_level,
             x_line, x_load, x_gen)
