@@ -12,6 +12,7 @@ import pandas as pd
 from DataLoading import get_all
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+
 class KMeans:
     
     def __init__(self, *args, **kwargs):   
