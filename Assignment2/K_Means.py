@@ -183,7 +183,7 @@ class KMeans:
                 return i - 1
 if __name__ == '__main__':
     km = KMeans()
-    centroids, losses = km.find_optimal_n_centroids([1, 12])
+    centroids, losses = km.find_optimal_n_centroids([1, 12], n_iter=50)
     plt.plot(np.arange(1,12), losses)
     plt.xlabel("Number of clusters")
     plt.ylabel("Loss")

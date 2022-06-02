@@ -24,12 +24,13 @@ vn_kv = 110
 length_km = 10
 line_type = '149-AL1/24-ST1A 110.0'
 
-lines = ((1,4), (4,5), (5,6), (6,3), (6,7), (7,8), (8,2), (8,9), (9,4))
+lines = ((1,4), (4,5), (5,6), (6,3), (6,7), (7,8), (8,2), (8,9), (9,4), )
 
 
 loads = ({'Bus':5, 'P':90, 'Q':30},
          {'Bus':7, 'P':100, 'Q':35},
-         {'Bus':9, 'P':125, 'Q':50})
+         {'Bus':9, 'P':125, 'Q':50},
+         {'Bus':6, 'P':115, 'Q':65})
 
 generators = ({'Bus':1, 'P':0, 'Q':0},
               {'Bus':2, 'P':163, 'Q':0},
@@ -119,15 +120,15 @@ def setup_network(x_line=[], x_load=[], x_gen=[]):
     return net
 
 if __name__ == '__main__':
-    p_n_loads = np.array([90, 100, 125])*1#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
+    p_n_loads = np.array([90, 100, 125, 115])*1#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
     
-    q_n_loads = np.array([30, 35, 50])*1#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
+    q_n_loads = np.array([30, 35, 50, 75])*1#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
     noise_level = 0.1
-    x_line = [2]
+    x_line = [8]
     x_load = []
     x_gen = []
     output_dir = "Simulation_results_temp/"
-    output_name = "Line_5-6_disconn"
-    time_steps = 70
+    output_name = "Line_4-9_disconn"
+    time_steps = 100
     run_sim(output_dir + output_name, time_steps, p_n_loads, q_n_loads, noise_level,
             x_line, x_load, x_gen)

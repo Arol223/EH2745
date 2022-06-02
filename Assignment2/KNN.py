@@ -94,15 +94,33 @@ class KNNClassifier:
             acc = sum(res)/len(res)
             accs.append(acc)
         return accs
+    def classify_many(self, base_data, unlabeled_data, k, class_col=None):
+        labels = []
+        n_points = unlabeled_data.shape[0]
+        for i in range(n_points):
+            point = unlabeled_data.iloc[i]
+            label = self.classify(k, point, data=base_data, class_col=class_col)
+            labels.append(label)
+        return labels
+    
 if __name__ == '__main__':
     
     #data = pd.read_csv("Data/Scaled_labeled_data.csv", index_col=0)
+    class_col = "Class"
     data = get_all() 
+    train, val = data_split(data)
+    train.reset_index(inplace=True, drop=True)
+    val.reset_index(inplace=True, drop=True)
     KNN = KNNClassifier()
-    accs = KNN.find_best_k(data, 20, class_col="Class", prop_test=0.3)
+    accs_train = KNN.find_best_k(train, 20, class_col=class_col, prop_test=0.9)
     
-    plt.plot(np.array(accs) * 100)
+    found_labels_test = KNN.classify_many(train, val, 1, class_col=class_col)
+    true_labels = val[class_col]
+    acc = sum(found_labels_test == true_labels)/len(true_labels)
+    
+    plt.plot(np.array(accs_train) * 100)
     plt.xlabel("k")
     plt.ylabel("Accuracy %")
+    print("Accuracy on test data is {}%".format(acc*100))
     #KNN = KNNClassifier(data=train)
     #c = KNN.find_neighbours(5, test.iloc[1])

@@ -11,8 +11,9 @@ import pandas as pd
 
 data_folder = "Simulation_results_temp/"
 
-cases = ("Gen2_disconn", "Line_5-6_disconn", "Gen3_disconn",
-         "Normal", "High 30% Load", "Low -30% Load",)
+cases = ( "Gen3_disconn", "P_bus6_200",
+         "Normal",  "Low -30% Load", "High 30% Load","Extra_load_bus_6",
+         "Line_4-9_disconn")
 variables = ("va_degree", "vm_pu")
 folder_name = "res_bus/"
 
