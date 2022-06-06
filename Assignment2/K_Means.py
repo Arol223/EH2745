@@ -12,7 +12,48 @@ import pandas as pd
 from DataLoading import get_all
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
+class MMScaler:
+    
+    def __init__(self):
+        pass
+    
+    def fit_transform(self, data, out_range=[0,1], eps=1e-16):
+        # Fit the scaler to the columns of data
+        
+        col_min = data.min(axis=0)
+        col_max = data.max(axis=0)
+        nz = np.nonzero(col_max - col_min)
+        data_std = deepcopy(data)
+        data_std[:, nz] = (data_std[:, nz] - col_min[nz]) / (col_max[nz] - col_min[nz]) 
+        data_scaled = data_std * (out_range[1] - out_range[0]) + out_range[0]
+        self.col_min = col_min
+        self.col_max = col_max
+        self.nz = nz
+        return data_scaled
+    
+    def transform(self, data, out_range=[0,1]):
+        col_min = self.col_min
+        col_max = self.col_max
+        nz = self.nz
+        data_std = deepcopy(data)
+        data_std[:, nz] = (data_std[:, nz] - col_min[nz]) / (col_max[nz] - col_min[nz])
+        data_scaled = data_std * (out_range[1] - out_range[0]) + out_range[0] 
+        return data_scaled
+
+    def inverse_transform(self, data):
+        r0 = data.min()
+        r1 = data.max()
+        col_min = self.col_min
+        col_max = self.col_max
+        nz = self.nz
+        data_std = deepcopy(data)                
+        data_std = (data + r0) / (r1 - r0)
+        
+        data_std[nz] = data_std[nz] * (col_max[nz] - col_min[nz]) + col_min[nz]
+        return data_std  
+                
 class KMeans:
     
     def __init__(self, *args, **kwargs):   
@@ -39,10 +80,11 @@ class KMeans:
         self.data = data
         self.means = means 
         self.stds = stds 
+        
     def scale_data(self, in_data=None):
         if in_data is None:
             in_data = self.data
-        scaler = MinMaxScaler()
+        scaler = MMScaler()# MinMaxScaler()
         data = in_data.to_numpy()
         data = scaler.fit_transform(data)
         in_data.iloc[:,:] = data

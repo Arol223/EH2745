@@ -120,15 +120,15 @@ def setup_network(x_line=[], x_load=[], x_gen=[]):
     return net
 
 if __name__ == '__main__':
-    p_n_loads = np.array([90, 100, 125, 115])*1#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
+    p_n_loads = np.array([90, 100, 125, 115])*0.6#[70, 80, 105]#[110, 120, 145] #p_n_loads = [90, 100, 125]
     
-    q_n_loads = np.array([30, 35, 50, 75])*1#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
+    q_n_loads = np.array([30, 35, 50, 75])*0.6#[20, 25, 40]#[40, 45, 60] #[30, 35, 50]
     noise_level = 0.1
-    x_line = [8]
+    x_line = []
     x_load = []
     x_gen = []
     output_dir = "Simulation_results_temp/"
-    output_name = "Line_4-9_disconn"
+    output_name = "Low - 40% Load"
     time_steps = 100
     run_sim(output_dir + output_name, time_steps, p_n_loads, q_n_loads, noise_level,
             x_line, x_load, x_gen)
